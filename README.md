@@ -29,3 +29,9 @@ Never deploy a `local-clock` artifact to a public cluster. The default build has
 ## Scope
 
 This is source publication, not an audit or a mainnet launch. There is no custody or refund instruction. Renewals require capped wallet consent, expire after their retry window, and can be stopped by cancelling membership or revoking the token allowance. The program is currently marked `UNLICENSED`; publication does not grant a software license.
+
+## GitHub Actions
+
+This repository is private. `Contract checks` runs on pushes, pull requests and manual dispatch. It checks formatting, Clippy and Rust tests for both normal calendar-month and accelerated local-test builds, then separately compiles the normal Solana SBF program. It uploads only the normal `.so`, never a keypair. There is no deployment workflow.
+
+The root `action.yml` allows the private app repository to obtain contract source through GitHub's organisation-scoped private-action sharing. GitHub supplies a temporary read-only download token; no personal token or deploy key is stored in the app. The app must pin the action to the exact full SHA of its `programs/infx-support` gitlink. Mismatched revisions fail before compilation. When updating that gitlink, update `.github/actions/contracts/action.yml` in the app in the same commit.
