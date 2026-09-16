@@ -1,0 +1,1575 @@
+{
+  "address": "GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv",
+  "metadata": {
+    "name": "infx_support",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "INFx direct support: gifts and membership charges, 99.9% to the creator and 0.1% to the treasury in one instruction"
+  },
+  "instructions": [
+    {
+      "name": "apply_payment_account_rotation",
+      "docs": [
+        "Anyone may apply a rotation once the cooling period has passed; only",
+        "the creator's earlier signature decided what it is."
+      ],
+      "discriminator": [88, 232, 119, 239, 126, 32, 238, 13],
+      "accounts": [
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "support_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "support_config.creator",
+                "account": "SupportConfig"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "authorize_renewal",
+      "docs": [
+        "Opt-in permission for at most twelve calendar-month renewals. The source",
+        "stays member-owned; only this program's PDA can use its allowance."
+      ],
+      "discriminator": [35, 115, 112, 227, 50, 136, 219, 56],
+      "accounts": [
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": ["membership"]
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "support_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "support_config.creator",
+                "account": "SupportConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "plan",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 108, 97, 110]
+              },
+              {
+                "kind": "account",
+                "path": "plan.creator",
+                "account": "MembershipPlan"
+              },
+              {
+                "kind": "account",
+                "path": "plan.index",
+                "account": "MembershipPlan"
+              }
+            ]
+          },
+          "relations": ["membership"]
+        },
+        {
+          "name": "membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "plan"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mandate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [114, 101, 110, 101, 119, 97, 108]
+              },
+              {
+                "kind": "account",
+                "path": "membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member_usdc_account",
+          "writable": true
+        },
+        {
+          "name": "delegate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114, 101, 110, 101, 119, 97, 108, 45, 100, 101, 108, 101, 103, 97, 116, 101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "member_usdc_account"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "payments",
+          "type": "u16"
+        },
+        {
+          "name": "expected_price",
+          "type": "u64"
+        },
+        {
+          "name": "expected_benefits_hash",
+          "type": {
+            "array": ["u8", 32]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cancel_membership",
+      "docs": ["Cancellation prevents future charges and does nothing else."],
+      "discriminator": [49, 7, 128, 159, 11, 73, 119, 162],
+      "accounts": [
+        {
+          "name": "member",
+          "signer": true,
+          "relations": ["membership"]
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "membership.plan",
+                "account": "Membership"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_payment_account_rotation",
+      "docs": [
+        "The creator can withdraw a pending rotation at any time before it applies,",
+        "including while the protocol is paused: cancelling only reduces risk."
+      ],
+      "discriminator": [111, 127, 120, 251, 193, 71, 90, 242],
+      "accounts": [
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": ["support_config"]
+        },
+        {
+          "name": "support_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "charge_membership_period",
+      "docs": [
+        "The member pays one period. Manual in Phase 1: the member signs each",
+        "time. A charge cannot exceed the plan price, cannot happen inside the",
+        "period, and cannot happen on a closed plan or a paused creator.",
+        "",
+        "Paying again after cancelling is a deliberate act by the member and",
+        "re-activates the membership."
+      ],
+      "discriminator": [156, 22, 228, 30, 11, 81, 111, 34],
+      "accounts": [
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "support_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "support_config.creator",
+                "account": "SupportConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "plan",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 108, 97, 110]
+              },
+              {
+                "kind": "account",
+                "path": "support_config.creator",
+                "account": "SupportConfig"
+              },
+              {
+                "kind": "account",
+                "path": "plan.index",
+                "account": "MembershipPlan"
+              }
+            ]
+          }
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "plan"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "member_usdc_account",
+          "writable": true
+        },
+        {
+          "name": "creator_payment_account",
+          "writable": true
+        },
+        {
+          "name": "treasury_usdc_account",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "charge_renewal",
+      "docs": [
+        "Permissionless submission: caller pays SOL but can only execute the exact",
+        "signed mandate. Chain time and account locks prevent early/duplicate charges."
+      ],
+      "discriminator": [140, 82, 17, 154, 141, 53, 130, 197],
+      "accounts": [
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "support_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "support_config.creator",
+                "account": "SupportConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "plan",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 108, 97, 110]
+              },
+              {
+                "kind": "account",
+                "path": "plan.creator",
+                "account": "MembershipPlan"
+              },
+              {
+                "kind": "account",
+                "path": "plan.index",
+                "account": "MembershipPlan"
+              }
+            ]
+          },
+          "relations": ["membership", "mandate"]
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "plan"
+              },
+              {
+                "kind": "account",
+                "path": "membership.member",
+                "account": "Membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mandate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [114, 101, 110, 101, 119, 97, 108]
+              },
+              {
+                "kind": "account",
+                "path": "membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member_usdc_account",
+          "writable": true
+        },
+        {
+          "name": "delegate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114, 101, 110, 101, 119, 97, 108, 45, 100, 101, 108, 101, 103, 97, 116, 101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "member_usdc_account"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "creator_payment_account",
+          "writable": true
+        },
+        {
+          "name": "treasury_usdc_account",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_membership_plan",
+      "docs": [
+        "A membership plan: a price per period and the hash of the benefits",
+        "description shown to members. The hash is a record, not a contract:",
+        "INFx does not enforce it (ADR 0007)."
+      ],
+      "discriminator": [242, 84, 233, 84, 224, 75, 27, 118],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": ["support_config"]
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "support_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 108, 97, 110]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "account",
+                "path": "support_config.plan_count",
+                "account": "SupportConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "period_seconds",
+          "type": "i64"
+        },
+        {
+          "name": "benefits_hash",
+          "type": {
+            "array": ["u8", 32]
+          }
+        }
+      ]
+    },
+    {
+      "name": "gift",
+      "docs": ["A one-off gift. 99.9% to the creator, 0.1% to the treasury, nothing else."],
+      "discriminator": [166, 241, 165, 114, 166, 138, 63, 165],
+      "accounts": [
+        {
+          "name": "fan",
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "support_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "support_config.creator",
+                "account": "SupportConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "fan_usdc_account",
+          "writable": true
+        },
+        {
+          "name": "creator_payment_account",
+          "writable": true
+        },
+        {
+          "name": "treasury_usdc_account",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "One-time setup. The treasury account is fixed here and can only be",
+        "changed by the admin, which on mainnet is the Squads multisig."
+      ],
+      "discriminator": [175, 175, 109, 31, 13, 152, 155, 237],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "treasury_usdc_account"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "registrar",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "register_creator",
+      "docs": [
+        "Registers a verified creator. Both the INFx registrar and the creator",
+        "sign: the registrar attests to verification, the creator attests to the",
+        "payment account. Neither can do it alone."
+      ],
+      "discriminator": [85, 3, 194, 210, 164, 140, 160, 195],
+      "accounts": [
+        {
+          "name": "registrar",
+          "writable": true,
+          "signer": true,
+          "relations": ["global"]
+        },
+        {
+          "name": "creator",
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "support_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payment_account"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "request_payment_account_rotation",
+      "docs": [
+        "The creator asks to move where they are paid. It takes effect after the",
+        "cooling period, and the pending change is visible on-chain meanwhile."
+      ],
+      "discriminator": [51, 204, 87, 251, 21, 133, 84, 6],
+      "accounts": [
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": ["support_config"]
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "support_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_payment_account"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_creator_paused",
+      "docs": ["The registrar or the admin can pause a creator: no new gifts or charges."],
+      "discriminator": [70, 69, 153, 242, 228, 190, 49, 144],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        },
+        {
+          "name": "support_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [99, 114, 101, 97, 116, 111, 114]
+              },
+              {
+                "kind": "account",
+                "path": "support_config.creator",
+                "account": "SupportConfig"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_paused",
+      "discriminator": [91, 60, 125, 192, 176, 225, 166, 218],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": ["global"]
+        },
+        {
+          "name": "global",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_plan_active",
+      "docs": [
+        "Closing a plan stops new charges. Existing members keep what they paid",
+        "for; nothing is refunded because nothing is held."
+      ],
+      "discriminator": [215, 87, 208, 194, 87, 65, 181, 5],
+      "accounts": [
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": ["plan"]
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 108, 97, 110]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "account",
+                "path": "plan.index",
+                "account": "MembershipPlan"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "active",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_plan_benefits_hash",
+      "docs": [
+        "A new benefits description creates a new version. Members keep the hash",
+        "they joined under so they can show what was promised when they paid."
+      ],
+      "discriminator": [197, 33, 50, 126, 209, 198, 80, 149],
+      "accounts": [
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": ["plan"]
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [112, 108, 97, 110]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "account",
+                "path": "plan.index",
+                "account": "MembershipPlan"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "benefits_hash",
+          "type": {
+            "array": ["u8", 32]
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_registrar",
+      "discriminator": [218, 97, 53, 173, 221, 199, 57, 136],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": ["global"]
+        },
+        {
+          "name": "global",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "registrar",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "GlobalConfig",
+      "discriminator": [149, 8, 156, 202, 160, 252, 176, 217]
+    },
+    {
+      "name": "Membership",
+      "discriminator": [231, 141, 180, 98, 109, 168, 175, 166]
+    },
+    {
+      "name": "MembershipPlan",
+      "discriminator": [197, 67, 103, 109, 191, 17, 144, 131]
+    },
+    {
+      "name": "RenewalMandate",
+      "discriminator": [171, 207, 134, 45, 69, 98, 174, 143]
+    },
+    {
+      "name": "SupportConfig",
+      "discriminator": [205, 22, 139, 144, 17, 203, 160, 0]
+    }
+  ],
+  "events": [
+    {
+      "name": "CreatorPauseChanged",
+      "discriminator": [192, 209, 183, 28, 86, 34, 183, 249]
+    },
+    {
+      "name": "CreatorRegistered",
+      "discriminator": [171, 154, 9, 10, 48, 130, 186, 128]
+    },
+    {
+      "name": "MembershipCancelled",
+      "discriminator": [94, 168, 103, 67, 69, 57, 84, 48]
+    },
+    {
+      "name": "MembershipCharged",
+      "discriminator": [208, 101, 92, 202, 169, 145, 10, 4]
+    },
+    {
+      "name": "PaymentAccountRotated",
+      "discriminator": [145, 122, 82, 124, 139, 95, 179, 13]
+    },
+    {
+      "name": "PaymentAccountRotationRequested",
+      "discriminator": [122, 249, 237, 81, 171, 211, 56, 131]
+    },
+    {
+      "name": "PlanBenefitsUpdated",
+      "discriminator": [141, 243, 116, 232, 105, 176, 245, 111]
+    },
+    {
+      "name": "PlanCreated",
+      "discriminator": [215, 11, 135, 121, 208, 119, 149, 149]
+    },
+    {
+      "name": "ProtocolPauseChanged",
+      "discriminator": [67, 33, 235, 73, 71, 124, 172, 110]
+    },
+    {
+      "name": "SupportReceived",
+      "discriminator": [163, 217, 225, 181, 40, 68, 45, 224]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6001,
+      "name": "ProtocolPaused",
+      "msg": "The protocol is paused"
+    },
+    {
+      "code": 6002,
+      "name": "CreatorPaused",
+      "msg": "This creator is paused"
+    },
+    {
+      "code": 6003,
+      "name": "Unauthorized",
+      "msg": "Signer is not authorised for this action"
+    },
+    {
+      "code": 6004,
+      "name": "BelowMinimum",
+      "msg": "Amount is below the minimum"
+    },
+    {
+      "code": 6005,
+      "name": "PriceOutOfRange",
+      "msg": "Plan price is outside the allowed range"
+    },
+    {
+      "code": 6006,
+      "name": "PeriodOutOfRange",
+      "msg": "Plan period is outside the allowed range"
+    },
+    {
+      "code": 6007,
+      "name": "PlanClosed",
+      "msg": "Plan is closed to new charges"
+    },
+    {
+      "code": 6008,
+      "name": "PeriodNotElapsed",
+      "msg": "The membership period has not elapsed since the last charge"
+    },
+    {
+      "code": 6009,
+      "name": "WrongMint",
+      "msg": "Token account is for the wrong mint"
+    },
+    {
+      "code": 6010,
+      "name": "WrongPaymentAccount",
+      "msg": "Payment account is not the creator's registered account"
+    },
+    {
+      "code": 6011,
+      "name": "WrongTreasuryAccount",
+      "msg": "Treasury account does not match the global configuration"
+    },
+    {
+      "code": 6012,
+      "name": "PaymentAccountNotOwnedByCreator",
+      "msg": "Payment account must be owned by the creator"
+    },
+    {
+      "code": 6013,
+      "name": "PlanCreatorMismatch",
+      "msg": "Plan does not belong to this creator"
+    },
+    {
+      "code": 6014,
+      "name": "NoPendingRotation",
+      "msg": "No payment-account rotation is pending"
+    },
+    {
+      "code": 6015,
+      "name": "RotationNotYetEffective",
+      "msg": "The rotation cooling period has not elapsed"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidMandate",
+      "msg": "Renewal permission is inactive or its accepted terms have changed"
+    },
+    {
+      "code": 6017,
+      "name": "MandateExpired",
+      "msg": "The renewal retry window has expired; fresh consent is required"
+    },
+    {
+      "code": 6018,
+      "name": "OtherDelegate",
+      "msg": "This USDC account already grants permission to another application; revoke it in your wallet first"
+    }
+  ],
+  "types": [
+    {
+      "name": "CreatorPauseChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreatorRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "payment_account",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GlobalConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "registrar",
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury_usdc_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Membership",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "joined_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_charged_at",
+            "type": "i64"
+          },
+          {
+            "name": "periods_paid",
+            "type": "u32"
+          },
+          {
+            "name": "benefits_hash_at_join",
+            "type": {
+              "array": ["u8", 32]
+            }
+          },
+          {
+            "name": "cancelled",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MembershipCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MembershipCharged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "creator_amount",
+            "type": "u64"
+          },
+          {
+            "name": "treasury_amount",
+            "type": "u64"
+          },
+          {
+            "name": "period_index",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MembershipPlan",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "index",
+            "type": "u32"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "period_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "benefits_hash",
+            "type": {
+              "array": ["u8", 32]
+            }
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PaymentAccountRotated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_payment_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "payment_account",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PaymentAccountRotationRequested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_payment_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "effective_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlanBenefitsUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "benefits_hash",
+            "type": {
+              "array": ["u8", 32]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlanCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "index",
+            "type": "u32"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "period_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "benefits_hash",
+            "type": {
+              "array": ["u8", 32]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolPauseChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RenewalMandate",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "source",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "benefits_hash",
+            "type": {
+              "array": ["u8", 32]
+            }
+          },
+          {
+            "name": "next_charge_at",
+            "type": "i64"
+          },
+          {
+            "name": "remaining",
+            "type": "u16"
+          },
+          {
+            "name": "periods_paid",
+            "type": "u32"
+          },
+          {
+            "name": "anchor_day",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SupportConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "payment_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_payment_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "rotation_effective_at",
+            "type": "i64"
+          },
+          {
+            "name": "plan_count",
+            "type": "u32"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SupportReceived",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "fan",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "creator_amount",
+            "type": "u64"
+          },
+          {
+            "name": "treasury_amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
