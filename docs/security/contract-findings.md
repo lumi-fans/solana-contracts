@@ -11,7 +11,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-1 | High (before real money) | Upgrade authority is one hot key and every renewal allowance is a standing target | Mitigated in process: app `docs/runbooks/upgrade-authority.md`, Q22; the hand-over itself needs a named human | untested (process) |
 | SEC-2 | Medium | `initialize` is first-come; no `set_admin` or `set_treasury` | Fixed (contracts `set_treasury`/`propose_admin`/`accept_admin` + upgrade-authority gate; app commit pending) | `security.test.ts` SEC-2 (three cases) |
 | SEC-3 | Medium | Monthly periods anchor to the join day, so a late payment can buy one day | Fixed (grace window keeps the anniversary; a later payment re-anchors) | `security.test.ts` SEC-3 (lapsed and in-grace cases); `calendar_properties.rs` calendar_alone_would_shorten… |
-| SEC-4 | Low | Rotation cooling does not defend against creator-key compromise, and the promised notice does not exist | Open | `security.test.ts` finding 4 |
+| SEC-4 | Low | Rotation cooling does not defend against creator-key compromise, and the promised notice does not exist | Fixed (owner re-checked on every payment; request indexed, emailed and shown to admin; threat model reworded) | `security.test.ts` SEC-4; app `events.test.ts`, `indexer.test.ts`, `notices.test.ts` |
 | SEC-5 | Low | Self-gift and self-membership record full income while only the fee moves | Open | `security.test.ts` finding 5 |
 | SEC-6 | Low | Creator pause does not stop a rotation being requested or applied | Open | `security.test.ts` finding 6 |
 | SEC-7 | Low | One delegate per USDC account makes renewal consents fungible across plans; no on-chain revoke | Open | `security.test.ts` finding 7 |
@@ -80,7 +80,9 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 
 **Fix.** Reword the threat model row. Implement the notice (index `PaymentAccountRotationRequested`, email the creator). Optional hardening: check `creator_payment_account.owner == support_config.creator` on every gift and charge so a phished `SetAuthority` fails payments loudly instead of redirecting them.
 
-**Pinned by.** `security.test.ts` "finding 4": after the creator moves ownership of the payment account to another key, a gift still pays it and no rotation is pending.
+**Done (16 September 2026).** Every gift, membership charge and renewal now requires `creator_payment_account.owner == support_config.creator`, so a payment account whose owner changed after registration is refused with `PaymentAccountNotOwnedByCreator` instead of being paid. The app indexes `PaymentAccountRotationRequested` as a `pending` row in `creator_payment_addresses` (retired when the rotation is applied), lists it in the admin creators table, and emails the creator's account address once, when the request is finalized, through the chain indexer's Email Sending binding (`apps/chain-indexer/src/notices.ts`, `NOTICE_EMAIL_FROM`). The threat model rows now say what the cooling period does and does not do.
+
+**Pinned by.** `security.test.ts` "SEC-4": after the creator moves ownership of the payment account to another key a gift is refused and no money moves; ownership restored, payments resume. App: `events.test.ts` decodes the request, `indexer.test.ts` records it once and flags the notice once, `notices.test.ts` covers the email body.
 
 ### SEC-5 · Self-gift and self-membership record full income while only the fee moves
 

@@ -796,7 +796,15 @@ pub struct ChargeRenewal<'info> {
     pub delegate: UncheckedAccount<'info>,
     #[account(address = global.usdc_mint @ SupportError::WrongMint)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
-    #[account(mut, address = support_config.payment_account @ SupportError::WrongPaymentAccount)]
+    // Raw constraints run in order, so a substituted address reports
+    // WrongPaymentAccount before the owner check below.
+    #[account(
+        mut,
+        constraint = creator_payment_account.key() == support_config.payment_account @ SupportError::WrongPaymentAccount,
+        // SEC-4: an account whose owner changed after registration is refused,
+        // so a phished SetAuthority stops payments instead of redirecting them.
+        constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
+    )]
     pub creator_payment_account: InterfaceAccount<'info, TokenAccount>,
     #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
@@ -937,7 +945,15 @@ pub struct Gift<'info> {
         constraint = fan_usdc_account.owner == fan.key() @ SupportError::Unauthorized,
     )]
     pub fan_usdc_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut, address = support_config.payment_account @ SupportError::WrongPaymentAccount)]
+    // Raw constraints run in order, so a substituted address reports
+    // WrongPaymentAccount before the owner check below.
+    #[account(
+        mut,
+        constraint = creator_payment_account.key() == support_config.payment_account @ SupportError::WrongPaymentAccount,
+        // SEC-4: an account whose owner changed after registration is refused,
+        // so a phished SetAuthority stops payments instead of redirecting them.
+        constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
+    )]
     pub creator_payment_account: InterfaceAccount<'info, TokenAccount>,
     #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
@@ -1022,7 +1038,15 @@ pub struct ChargeMembershipPeriod<'info> {
         constraint = member_usdc_account.owner == member.key() @ SupportError::Unauthorized,
     )]
     pub member_usdc_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut, address = support_config.payment_account @ SupportError::WrongPaymentAccount)]
+    // Raw constraints run in order, so a substituted address reports
+    // WrongPaymentAccount before the owner check below.
+    #[account(
+        mut,
+        constraint = creator_payment_account.key() == support_config.payment_account @ SupportError::WrongPaymentAccount,
+        // SEC-4: an account whose owner changed after registration is refused,
+        // so a phished SetAuthority stops payments instead of redirecting them.
+        constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
+    )]
     pub creator_payment_account: InterfaceAccount<'info, TokenAccount>,
     #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
