@@ -1,16 +1,72 @@
 name: Contract checks
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: contracts-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
 jobs:
   rust:
+    name: Rust (${{ matrix.clock }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        clock: [monthly, local-test]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.clock }}
       - run: cargo fmt --check
-      - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo test --locked
+      - name: Lint and test normal calendar-month build
+        if: matrix.clock == 'monthly'
+        run: |
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
+      - name: Lint and test accelerated local-only build
+        if: matrix.clock == 'local-test'
+        env:
+          LUMI_LOCAL_RENEWAL_SECONDS: '5'
+        run: |
+          cargo clippy --locked --all-targets --features local-clock -- -D warnings
+          cargo test --locked --features local-clock
+  sbf:
+    name: Solana program build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.86.0
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/solana
+            target
+          key: sbf-linux-v2.1.18-tools1.51-${{ hashFiles('Cargo.lock', 'src/**') }}
+          restore-keys: sbf-linux-v2.1.18-tools1.51-
+      - name: Install pinned Solana tools
+        run: |
+          curl --fail --silent --show-error --location --retry 3 https://github.com/anza-xyz/agave/releases/download/v2.1.18/solana-release-x86_64-unknown-linux-gnu.tar.bz2 -o /tmp/solana.tar.bz2
+          mkdir -p "$HOME/.cache/solana"
+          tar -xjf /tmp/solana.tar.bz2 -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/solana-release/bin" >> "$GITHUB_PATH"
+      - name: Build normal monthly program
+        run: cargo build-sbf --tools-version v1.51 -- --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monthly-program-${{ github.sha }}
+          path: target/deploy/infx_support.so
+          if-no-files-found: error
+          retention-days: 7

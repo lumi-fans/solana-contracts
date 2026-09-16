@@ -1,0 +1,21 @@
+name: Pinned Lumi contract source
+description: Materialise the exact app-pinned contracts using GitHub private-action sharing.
+runs:
+  using: composite
+  steps:
+    - name: Verify revision and copy contract source
+      shell: bash
+      env:
+        ACTION_SOURCE: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        revision="$(basename "$ACTION_SOURCE")"
+        expected="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD:programs/infx-support)"
+        if [[ ! "$revision" =~ ^[a-f0-9]{40}$ || "$revision" != "$expected" ]]; then
+          echo "::error::Pin this action to the same full SHA as programs/infx-support. Update .github/actions/contracts/action.yml when updating the submodule."
+          exit 1
+        fi
+        destination="$GITHUB_WORKSPACE/programs/infx-support"
+        mkdir -p "$destination"
+        cp -a "$ACTION_SOURCE/." "$destination/"
+        echo "Contract source verified at $revision"

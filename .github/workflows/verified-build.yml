@@ -1,0 +1,92 @@
+# Deterministic build in the pinned solana-verify container, compared with
+# the bytes on the cluster. Runs on every release tag and on demand.
+#
+# The comparison uses solana-verify's hash (SHA-256 of the binary with
+# trailing zero bytes removed), which is what explorers show. The plain file
+# hash is printed alongside for the application's release record.
+#
+# Writing the verification PDA on chain needs the upgrade authority's
+# signature, so that step is a person's, not this job's:
+#   solana-verify verify-from-repo -u <cluster url> --program-id <id> \
+#     https://github.com/lumi-fans/solana-contracts --commit-hash <sha> \
+#     --library-name infx_support -k <upgrade authority keypair>
+name: Verified build
+on:
+  push:
+    tags: ['devnet-*', 'mainnet-*']
+  workflow_dispatch:
+    inputs:
+      cluster_url:
+        description: RPC URL of the cluster to compare against
+        default: https://api.devnet.solana.com
+        required: true
+permissions:
+  contents: read
+jobs:
+  verified-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROGRAM_ID: GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv
+      BASE_IMAGE: solanafoundation/solana-verifiable-build:2.1.18
+      SOLANA_VERIFY_VERSION: 0.5.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Only installs the solana-verify CLI; the program itself is compiled
+      # inside the pinned container, not by this toolchain.
+      - uses: dtolnay/rust-toolchain@1.89.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: solana-verify
+      - name: Install solana-verify
+        # rust-toolchain.toml pins the checkout to 1.86; the CLI needs 1.89.
+        run: cargo +1.89.0 install solana-verify --version "$SOLANA_VERIFY_VERSION" --locked
+      - name: Choose the cluster
+        id: cluster
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF_NAME}" in
+            mainnet-*) url="https://api.mainnet-beta.solana.com" ;;
+            devnet-*)  url="https://api.devnet.solana.com" ;;
+            *)         url="${{ github.event.inputs.cluster_url || 'https://api.devnet.solana.com' }}" ;;
+          esac
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+      - name: Deterministic build in the pinned container
+        run: solana-verify build --base-image "$BASE_IMAGE" --library-name infx_support
+      - name: Compare with the cluster
+        env:
+          CLUSTER_URL: ${{ steps.cluster.outputs.url }}
+        run: |
+          set -euo pipefail
+          SO=target/deploy/infx_support.so
+          BUILT="$(solana-verify get-executable-hash "$SO")"
+          ONCHAIN="$(solana-verify get-program-hash -u "$CLUSTER_URL" "$PROGRAM_ID")"
+          FILE="$(sha256sum "$SO" | cut -d' ' -f1)"
+          SIZE="$(wc -c < "$SO" | tr -d ' ')"
+          {
+            echo "## Verified build of ${GITHUB_SHA}"
+            echo
+            echo "| Measure | Value |"
+            echo "| --- | --- |"
+            echo "| solana-verify hash of the build | \`${BUILT}\` |"
+            echo "| solana-verify hash on ${CLUSTER_URL} | \`${ONCHAIN}\` |"
+            echo "| plain SHA-256 of the .so file | \`${FILE}\` |"
+            echo "| size in bytes | ${SIZE} |"
+            echo "| container | \`${BASE_IMAGE}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "built   ${BUILT}"
+          echo "onchain ${ONCHAIN}"
+          echo "file    ${FILE} (${SIZE} bytes)"
+          if [[ "$BUILT" != "$ONCHAIN" ]]; then
+            echo "::error::the deterministic build (${BUILT}) is not what is deployed (${ONCHAIN}); deploy this artifact or tag the commit that was deployed"
+            exit 1
+          fi
+      - name: Keep the artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: infx_support-${{ github.ref_name }}
+          path: target/deploy/infx_support.so
+          if-no-files-found: error

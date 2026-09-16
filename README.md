@@ -30,6 +30,29 @@ Never deploy a `local-clock` artifact to a public cluster. It cannot run there i
 
 Findings from security review are tracked in [`docs/security/contract-findings.md`](docs/security/contract-findings.md), in priority order with a status and the test that pins each one; [`docs/security/README.md`](docs/security/README.md) says how to keep it current. `tests/calendar_properties.rs` checks the fee split and the calendar arithmetic against an independent implementation. Behavioural assertions against real transactions live in the app repository's validator suite.
 
+## Verified build
+
+Every release tag (`devnet-*`, `mainnet-*`) runs the `Verified build` workflow: a deterministic `solana-verify build` in the pinned `solanafoundation/solana-verifiable-build:2.1.18` container, compared with the bytes on the cluster. The job summary shows two hashes for the same binary: the plain SHA-256 of the `.so` file, which the Lumi application records and checks in the browser, and solana-verify's hash (the file with trailing zero bytes removed), which Solana Explorer and Solscan show. The Lumi Contracts page (`/contracts`) displays both next to the deployed slot, the deploy transaction and the commit.
+
+To reproduce locally with Docker running:
+
+```sh
+cargo install solana-verify --version 0.5.1 --locked
+solana-verify build --base-image solanafoundation/solana-verifiable-build:2.1.18 --library-name infx_support
+solana-verify get-executable-hash target/deploy/infx_support.so
+solana-verify get-program-hash -u https://api.devnet.solana.com GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv
+```
+
+Publishing the verification on chain, so explorers show the program as verified, is a signature by the upgrade authority and is done by a person: `solana-verify verify-from-repo -u <cluster url> --program-id GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv https://github.com/lumi-fans/solana-contracts --commit-hash <tag commit> --library-name infx_support -k <upgrade authority keypair>`.
+
+The binary embeds a `security.txt` section (contact, policy, source) that explorers render; the policy is [SECURITY.md](SECURITY.md).
+
 ## Scope
 
 This is source publication, not an audit or a mainnet launch. There is no custody or refund instruction. Renewals require capped wallet consent, expire after their retry window, and can be stopped by cancelling membership or revoking the token allowance. The program is currently marked `UNLICENSED`; publication does not grant a software license.
+
+## GitHub Actions
+
+This repository is private. `Contract checks` runs on pushes, pull requests and manual dispatch. It checks formatting, Clippy and Rust tests for both normal calendar-month and accelerated local-test builds, then separately compiles the normal Solana SBF program. It uploads only the normal `.so`, never a keypair. There is no deployment workflow.
+
+The root `action.yml` allows the private app repository to obtain contract source through GitHub's organisation-scoped private-action sharing. GitHub supplies a temporary read-only download token; no personal token or deploy key is stored in the app. The app must pin the action to the exact full SHA of its `programs/infx-support` gitlink. Mismatched revisions fail before compilation. When updating that gitlink, update `.github/actions/contracts/action.yml` in the app in the same commit.
