@@ -20,7 +20,8 @@ mod calendar;
 #[cfg(not(feature = "local-clock"))]
 use calendar::next_month;
 
-// Compiled only for the disposable local validator; never a runtime production flag.
+// Compiled only for the disposable local validator; never a runtime production
+// flag. The build also declares a different program id (see `declare_id!`).
 #[cfg(feature = "local-clock")]
 fn next_month(timestamp: i64, anchor: u8) -> Result<(i64, u8)> {
     let seconds: i64 = env!("LUMI_LOCAL_RENEWAL_SECONDS")
@@ -36,7 +37,16 @@ fn next_month(timestamp: i64, anchor: u8) -> Result<(i64, u8)> {
     ))
 }
 
+#[cfg(not(feature = "local-clock"))]
 declare_id!("GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv");
+
+// SEC-11: the accelerated build declares its own id. Anchor refuses to run a
+// program at any address other than its declared id, so this artifact cannot
+// execute at the public program address even if someone uploads it there.
+// The keypair for this id is not needed: a local validator loads the
+// program at genesis from the address alone.
+#[cfg(feature = "local-clock")]
+declare_id!("CnA1TVJUnVLzh5FgWwNcNcdT6MdiTRKGgkudHihUHVun");
 
 /// 0.1% of every gift and membership charge. Changing this needs a human.
 pub const FEE_BPS: u64 = 10;

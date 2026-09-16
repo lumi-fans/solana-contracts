@@ -24,7 +24,7 @@ The optional `local-clock` feature replaces each monthly interval with a build-t
 LUMI_LOCAL_RENEWAL_SECONDS=5 cargo build-sbf --tools-version v1.51 --sbf-out-dir .local/clock-5 -- --features local-clock
 ```
 
-Never deploy a `local-clock` artifact to a public cluster. The default build has no accelerated clock. The interval must be 5–86400 seconds. No program keypair, authority key, treasury secret or deployment credentials are included.
+Never deploy a `local-clock` artifact to a public cluster. It cannot run there in any case: the feature build declares its own program id, `CnA1TVJUnVLzh5FgWwNcNcdT6MdiTRKGgkudHihUHVun`, and Anchor refuses to execute a program at any address other than its declared id, so the artifact is inert at the public address (SEC-11 in `docs/security/contract-findings.md`). No keypair for the local id exists; a local validator loads the program at genesis by address. The default build has no accelerated clock and declares the public id. The interval must be 5–86400 seconds. No program keypair, authority key, treasury secret or deployment credentials are included.
 
 ## Security
 

@@ -18,7 +18,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-8 | Low | The registrar hot key can undo an admin's creator pause | Fixed (registrar may only set `paused = true`) | `security.test.ts` SEC-8 |
 | SEC-9 | Low | A pause, a closed plan or a benefits update longer than 72 hours silently voids every live mandate | Documented (runbooks, creator guide, dashboard note); skip-forward deferred to Q23 | `renewals.test.ts` expired and changed-terms cases |
 | SEC-10 | Low | Membership records the actual charge time while the mandate advances from schedule; re-consent after a late renewal can skip a month | Fixed (`last_charged_at` records the scheduled period start) | `security.test.ts` SEC-10; `calendar_properties.rs` late_renewal_across… |
-| SEC-11 | Low | The `local-clock` artifact is only distinguishable from the real one by hash | Open | untested (build) |
+| SEC-11 | Low | The `local-clock` artifact is only distinguishable from the real one by hash | Fixed (feature build declares its own program id) | `tests/program_id.rs` under both builds; app `support-flow.test.ts` SEC-11 |
 | SEC-12 | Informational | Missing events and unconsumed events leave the indexer blind to plan closure, registrar change and pending rotations | Open | untested |
 | SEC-13 | Informational | Program accounts are never closable; member rent is locked forever | Accepted for v0 | n/a |
 | SEC-14 | Informational | Registrar co-signature would replay across clusters if the key were reused | Documented rule: one registrar key per cluster (`rotate-registrar.md`) | n/a |
@@ -169,6 +169,10 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 **What.** A build with the `local-clock` feature accepts renewal periods of 5 seconds to a day. It has the same program ID and the same IDL as the real build; the only thing keeping it off devnet or mainnet is a separate output directory and process.
 
 **Fix.** Under `cfg(feature = "local-clock")` use a different `declare_id!`. Anchor refuses to run a program at an address other than its declared ID, so the accelerated artifact cannot execute at the public program address even if someone uploads it.
+
+**Done (16 September 2026).** The `local-clock` build declares `CnA1TVJUnVLzh5FgWwNcNcdT6MdiTRKGgkudHihUHVun`; the standard build keeps the public id. No keypair for the local id exists anywhere: the local validator loads the program at genesis by address. The app's local stack deploys and initialises at that id (`scripts/local/stack.ts`), the chain client exports it as `INFX_SUPPORT_LOCAL_CLOCK_PROGRAM_ID`, and the browser's address check accepts it only when the cluster is `localnet` (`apps/web/src/lib/support-flow.ts`).
+
+**Pinned by.** `tests/program_id.rs`: the standard build declares the public id and the feature build declares the local one (`LUMI_LOCAL_RENEWAL_SECONDS=5 cargo test --features local-clock`). App `support-flow.test.ts` "SEC-11": the local id is refused off localnet.
 
 ### SEC-12 · Missing events and unconsumed events leave the indexer blind
 
