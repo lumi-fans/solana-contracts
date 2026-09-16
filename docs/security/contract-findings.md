@@ -21,7 +21,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-11 | Low | The `local-clock` artifact is only distinguishable from the real one by hash | Open | untested (build) |
 | SEC-12 | Informational | Missing events and unconsumed events leave the indexer blind to plan closure, registrar change and pending rotations | Open | untested |
 | SEC-13 | Informational | Program accounts are never closable; member rent is locked forever | Accepted for v0 | n/a |
-| SEC-14 | Informational | Registrar co-signature would replay across clusters if the key were reused | Open (rule) | n/a |
+| SEC-14 | Informational | Registrar co-signature would replay across clusters if the key were reused | Documented rule: one registrar key per cluster (`rotate-registrar.md`) | n/a |
 | SEC-15 | Informational | A Token-2022 mint with transfer fees would make events overstate what arrived | Accepted (USDC is classic SPL) | n/a |
 
 ## Details
@@ -182,7 +182,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 
 ### SEC-14 · Registrar co-signature would replay across clusters if the key were reused
 
-The program ID, seeds and therefore every PDA are identical on devnet and mainnet, and `cosignRegistration` does not check the blockhash's cluster. A `register_creator` transaction co-signed for devnet is valid on mainnet if `global.registrar` is the same key there. Rule: one registrar key per environment, never reused. The co-signing check is otherwise tight: one instruction, legacy format only, exact program and discriminator, exact accounts and flags, creator pays and has already signed.
+The program ID, seeds and therefore every PDA are identical on devnet and mainnet, and `cosignRegistration` does not check the blockhash's cluster. A `register_creator` transaction co-signed for devnet is valid on mainnet if `global.registrar` is the same key there. Rule: one registrar key per environment, never reused; written into the app's `docs/runbooks/rotate-registrar.md` on 16 September 2026. The co-signing check is otherwise tight: one instruction, legacy format only, exact program and discriminator, exact accounts and flags, creator pays and has already signed.
 
 ### SEC-15 · A Token-2022 mint with transfer fees would make events overstate what arrived
 
