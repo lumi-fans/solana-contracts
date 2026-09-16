@@ -19,7 +19,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-9 | Low | A pause, a closed plan or a benefits update longer than 72 hours silently voids every live mandate | Documented (runbooks, creator guide, dashboard note); skip-forward deferred to Q23 | `renewals.test.ts` expired and changed-terms cases |
 | SEC-10 | Low | Membership records the actual charge time while the mandate advances from schedule; re-consent after a late renewal can skip a month | Fixed (`last_charged_at` records the scheduled period start) | `security.test.ts` SEC-10; `calendar_properties.rs` late_renewal_across… |
 | SEC-11 | Low | The `local-clock` artifact is only distinguishable from the real one by hash | Fixed (feature build declares its own program id) | `tests/program_id.rs` under both builds; app `support-flow.test.ts` SEC-11 |
-| SEC-12 | Informational | Missing events and unconsumed events leave the indexer blind to plan closure, registrar change and pending rotations | Open | untested |
+| SEC-12 | Informational | Missing events and unconsumed events leave the indexer blind to plan closure, registrar change and pending rotations | Fixed (three new events; every event now indexed) | app `events.test.ts`, `indexer.test.ts` SEC-12 |
 | SEC-13 | Informational | Program accounts are never closable; member rent is locked forever | Accepted for v0 | n/a |
 | SEC-14 | Informational | Registrar co-signature would replay across clusters if the key were reused | Documented rule: one registrar key per cluster (`rotate-registrar.md`) | n/a |
 | SEC-15 | Informational | A Token-2022 mint with transfer fees would make events overstate what arrived | Accepted (USDC is classic SPL) | n/a |
@@ -181,6 +181,10 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 **What.** The three instructions emit nothing. `PaymentAccountRotationRequested`, `CreatorPauseChanged` and `ProtocolPauseChanged` are emitted but not parsed by the indexer. The database can show a closed plan as open, admin tooling cannot see a registrar change on the statement, and nobody is told a rotation is pending (SEC-4).
 
 **Fix.** Emit `PlanActiveChanged`, `RegistrarChanged`, `PaymentAccountRotationCancelled`; consume the rotation and pause events.
+
+**Done (16 September 2026).** `set_plan_active` emits `PlanActiveChanged`, `set_registrar` emits `RegistrarChanged`, `cancel_payment_account_rotation` emits `PaymentAccountRotationCancelled`. The indexer now parses every event the program emits: plan closure updates `membership_plans.active`, a cancelled rotation retires the pending payment address, and the pause, registrar, treasury, admin and renewal-revocation events are stored in `chain_events` so an operator can see every governance change on the record.
+
+**Pinned by.** App `events.test.ts` decodes the new events; `indexer.test.ts` "SEC-12" closes a plan and retires a cancelled rotation from finalized events and records both.
 
 ### SEC-13 · Program accounts are never closable
 

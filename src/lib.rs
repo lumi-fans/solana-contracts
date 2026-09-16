@@ -120,7 +120,12 @@ pub mod infx_support {
     }
 
     pub fn set_registrar(ctx: Context<AdminOnly>, registrar: Pubkey) -> Result<()> {
+        let previous = ctx.accounts.global.registrar;
         ctx.accounts.global.registrar = registrar;
+        emit!(RegistrarChanged {
+            previous_registrar: previous,
+            registrar,
+        });
         Ok(())
     }
 
@@ -285,6 +290,10 @@ pub mod infx_support {
     /// for; nothing is refunded because nothing is held.
     pub fn set_plan_active(ctx: Context<CreatorOnlyPlan>, active: bool) -> Result<()> {
         ctx.accounts.plan.active = active;
+        emit!(PlanActiveChanged {
+            plan: ctx.accounts.plan.key(),
+            active,
+        });
         Ok(())
     }
 
@@ -672,6 +681,9 @@ pub mod infx_support {
         let config = &mut ctx.accounts.support_config;
         config.pending_payment_account = Pubkey::default();
         config.rotation_effective_at = 0;
+        emit!(PaymentAccountRotationCancelled {
+            creator: config.creator,
+        });
         Ok(())
     }
 
@@ -1262,6 +1274,23 @@ pub struct PlanCreated {
     pub price: u64,
     pub period_seconds: i64,
     pub benefits_hash: [u8; 32],
+}
+
+#[event]
+pub struct PlanActiveChanged {
+    pub plan: Pubkey,
+    pub active: bool,
+}
+
+#[event]
+pub struct RegistrarChanged {
+    pub previous_registrar: Pubkey,
+    pub registrar: Pubkey,
+}
+
+#[event]
+pub struct PaymentAccountRotationCancelled {
+    pub creator: Pubkey,
 }
 
 #[event]
