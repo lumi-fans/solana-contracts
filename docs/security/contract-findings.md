@@ -16,7 +16,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-6 | Low | Creator pause does not stop a rotation being requested or applied | Fixed (`CreatorPaused` on request and apply) | `security.test.ts` SEC-6 |
 | SEC-7 | Low | One delegate per USDC account makes renewal consents fungible across plans; no on-chain revoke | Fixed (`revoke_renewal` per plan; wallet-level revoke documented as all-or-nothing) | `security.test.ts` SEC-7 |
 | SEC-8 | Low | The registrar hot key can undo an admin's creator pause | Fixed (registrar may only set `paused = true`) | `security.test.ts` SEC-8 |
-| SEC-9 | Low | A pause, a closed plan or a benefits update longer than 72 hours silently voids every live mandate | Open | `renewals.test.ts` expired case (partial) |
+| SEC-9 | Low | A pause, a closed plan or a benefits update longer than 72 hours silently voids every live mandate | Documented (runbooks, creator guide, dashboard note); skip-forward deferred to Q23 | `renewals.test.ts` expired and changed-terms cases |
 | SEC-10 | Low | Membership records the actual charge time while the mandate advances from schedule; re-consent after a late renewal can skip a month | Open | `calendar_properties.rs` late_renewal_across… |
 | SEC-11 | Low | The `local-clock` artifact is only distinguishable from the real one by hash | Open | untested (build) |
 | SEC-12 | Informational | Missing events and unconsumed events leave the indexer blind to plan closure, registrar change and pending rotations | Open | untested |
@@ -144,7 +144,9 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 
 **Fix.** Document in `docs/runbooks/pause-protocol.md` and the creator guide. Consider letting an expired mandate skip forward without charging (`next_charge_at = next_month(...)` when the window has passed, "no catch-up debt" preserved) so a pause does not force thousands of re-consents.
 
-**Pinned by.** `renewals.test.ts` "expired" case covers the window; the pause and benefits interactions are untested.
+**Done (16 September 2026).** `docs/runbooks/pause-protocol.md` and `pause-creator.md` state what a pause longer than 72 hours does to mandates and recommend creator-level pauses; the creator guide and the dashboard's benefits editor say that a benefits edit or a closed plan stops every member's automatic renewal for that plan and that members re-consent on their next visit. Skipping the missed month and resuming automatically was not implemented: it would charge members again after a gap they did not choose, which is a founder decision (Q23, default keeps expiry and fresh consent).
+
+**Pinned by.** `renewals.test.ts` "expired" (past the window) and "changed-terms" (benefits hash differs) cases; the program behaviour is unchanged.
 
 ### SEC-10 · Membership records the actual charge time while the mandate advances from schedule
 
