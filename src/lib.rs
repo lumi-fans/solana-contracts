@@ -1,4 +1,4 @@
-//! lumi-support: the Phase 1 product.
+//! lumi: the Phase 1 product.
 //!
 //! A fan sends a one-off gift or pays a membership period in USDC. In the same
 //! instruction 99.9% goes to the creator's registered USDC account and 0.1% to the
@@ -52,7 +52,7 @@ declare_id!("CnA1TVJUnVLzh5FgWwNcNcdT6MdiTRKGgkudHihUHVun");
 // program. Omitted from CPI/no-entrypoint builds so it appears once per binary.
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {
-    name: "Lumi support program (lumi_support)",
+    name: "Lumi program (lumi)",
     project_url: "https://lumi-fans.com/contracts",
     contacts: "email:hello@lumi-fans.com",
     policy: "https://github.com/lumi-fans/solana-contracts/blob/main/SECURITY.md",
@@ -109,7 +109,7 @@ pub fn split(amount: u64) -> Result<(u64, u64)> {
 }
 
 #[program]
-pub mod lumi_support {
+pub mod lumi {
     use super::*;
 
     /// One-time setup. Only the program's upgrade authority can call it, so a
@@ -1004,7 +1004,7 @@ pub struct Initialize<'info> {
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
     /// This program, so its ProgramData account can be checked.
     #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ SupportError::Unauthorized)]
-    pub program: Program<'info, crate::program::LumiSupport>,
+    pub program: Program<'info, crate::program::Lumi>,
     /// Only the upgrade authority may initialise.
     #[account(constraint = program_data.upgrade_authority_address == Some(admin.key()) @ SupportError::Unauthorized)]
     pub program_data: Account<'info, ProgramData>,

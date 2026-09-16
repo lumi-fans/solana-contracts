@@ -788,15 +788,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lumi-support"
-version = "0.1.0"
-dependencies = [
- "anchor-lang",
- "anchor-spl",
- "solana-security-txt",
-]
-
-[[package]]
 name = "inout"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -912,6 +903,15 @@ name = "log"
 version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+
+[[package]]
+name = "lumi"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "solana-security-txt",
+]
 
 [[package]]
 name = "memchr"

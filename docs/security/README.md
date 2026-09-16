@@ -1,6 +1,6 @@
 # Security
 
-Living security record for the `lumi_support` program. The threat model lives in the app repository (`docs/threat-model/phase1.md`) and says what we intend to defend; this directory says what a review actually found and what state each finding is in.
+Living security record for the `lumi` program. The threat model lives in the app repository (`docs/threat-model/phase1.md`) and says what we intend to defend; this directory says what a review actually found and what state each finding is in.
 
 | File | What it holds |
 | --- | --- |

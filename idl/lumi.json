@@ -1,7 +1,7 @@
 {
   "address": "GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv",
   "metadata": {
-    "name": "lumi_support",
+    "name": "lumi",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "Lumi direct support: gifts and membership charges, 99.9% to the creator and 0.1% to the treasury in one instruction"

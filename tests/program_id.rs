@@ -11,12 +11,12 @@ const LOCAL_CLOCK_ID: &str = "CnA1TVJUnVLzh5FgWwNcNcdT6MdiTRKGgkudHihUHVun";
 #[cfg(not(feature = "local-clock"))]
 #[test]
 fn the_standard_build_declares_the_public_program_id() {
-    assert_eq!(lumi_support::ID.to_string(), PUBLIC_ID);
+    assert_eq!(lumi::ID.to_string(), PUBLIC_ID);
 }
 
 #[cfg(feature = "local-clock")]
 #[test]
 fn the_local_clock_build_declares_its_own_program_id() {
-    assert_eq!(lumi_support::ID.to_string(), LOCAL_CLOCK_ID);
-    assert_ne!(lumi_support::ID.to_string(), PUBLIC_ID);
+    assert_eq!(lumi::ID.to_string(), LOCAL_CLOCK_ID);
+    assert_ne!(lumi::ID.to_string(), PUBLIC_ID);
 }
