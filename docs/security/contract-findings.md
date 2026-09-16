@@ -17,7 +17,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-7 | Low | One delegate per USDC account makes renewal consents fungible across plans; no on-chain revoke | Fixed (`revoke_renewal` per plan; wallet-level revoke documented as all-or-nothing) | `security.test.ts` SEC-7 |
 | SEC-8 | Low | The registrar hot key can undo an admin's creator pause | Fixed (registrar may only set `paused = true`) | `security.test.ts` SEC-8 |
 | SEC-9 | Low | A pause, a closed plan or a benefits update longer than 72 hours silently voids every live mandate | Documented (runbooks, creator guide, dashboard note); skip-forward deferred to Q23 | `renewals.test.ts` expired and changed-terms cases |
-| SEC-10 | Low | Membership records the actual charge time while the mandate advances from schedule; re-consent after a late renewal can skip a month | Open | `calendar_properties.rs` late_renewal_across… |
+| SEC-10 | Low | Membership records the actual charge time while the mandate advances from schedule; re-consent after a late renewal can skip a month | Fixed (`last_charged_at` records the scheduled period start) | `security.test.ts` SEC-10; `calendar_properties.rs` late_renewal_across… |
 | SEC-11 | Low | The `local-clock` artifact is only distinguishable from the real one by hash | Open | untested (build) |
 | SEC-12 | Informational | Missing events and unconsumed events leave the indexer blind to plan closure, registrar change and pending rotations | Open | untested |
 | SEC-13 | Informational | Program accounts are never closable; member rent is locked forever | Accepted for v0 | n/a |
@@ -158,7 +158,9 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 
 **Fix.** Keep one `next_due_at` on `Membership`, advance it from schedule in both paths, and derive everything else from it.
 
-**Pinned by.** `calendar_properties.rs` `late_renewal_across_a_month_boundary_diverges_from_the_schedule`.
+**Done (16 September 2026).** `charge_renewal` now writes the mandate's scheduled `next_charge_at` into `membership.last_charged_at` before advancing the schedule, so the membership and the mandate agree on when the paid period started, whatever hour inside the 72-hour window the keeper landed. Together with SEC-3, `last_charged_at` always means "start of the paid period" on every path. The event still carries the wall-clock time.
+
+**Pinned by.** `security.test.ts` "SEC-10": a renewal charged two days late records the scheduled time, not the charge time. `calendar_properties.rs` `late_renewal_across_a_month_boundary_diverges_from_the_schedule` keeps the calendar fact that motivated it.
 
 ### SEC-11 · The `local-clock` artifact is only distinguishable from the real one by hash
 

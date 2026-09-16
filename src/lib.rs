@@ -596,8 +596,10 @@ pub mod infx_support {
             )?;
         }
         mandate.remaining -= 1;
+        // SEC-10: the paid period starts at the scheduled time, however late
+        // inside the window the keeper landed, so membership and mandate agree.
+        membership.last_charged_at = mandate.next_charge_at;
         mandate.next_charge_at = next_month(mandate.next_charge_at, mandate.anchor_day)?.0;
-        membership.last_charged_at = now;
         membership.periods_paid = membership
             .periods_paid
             .checked_add(1)
