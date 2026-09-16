@@ -758,7 +758,11 @@ pub struct AuthorizeRenewal<'info> {
     pub member: Signer<'info>,
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Box<Account<'info, GlobalConfig>>,
-    #[account(seeds = [CREATOR_SEED, support_config.creator.as_ref()], bump = support_config.bump)]
+    #[account(
+        seeds = [CREATOR_SEED, support_config.creator.as_ref()],
+        bump = support_config.bump,
+        constraint = support_config.creator != member.key() @ SupportError::SelfSupport,
+    )]
     pub support_config: Box<Account<'info, SupportConfig>>,
     #[account(seeds = [PLAN_SEED, plan.creator.as_ref(), &plan.index.to_le_bytes()], bump = plan.bump, constraint = plan.creator == support_config.creator @ SupportError::PlanCreatorMismatch)]
     pub plan: Box<Account<'info, MembershipPlan>>,
@@ -781,7 +785,11 @@ pub struct AuthorizeRenewal<'info> {
 pub struct ChargeRenewal<'info> {
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Box<Account<'info, GlobalConfig>>,
-    #[account(seeds = [CREATOR_SEED, support_config.creator.as_ref()], bump = support_config.bump)]
+    #[account(
+        seeds = [CREATOR_SEED, support_config.creator.as_ref()],
+        bump = support_config.bump,
+        constraint = support_config.creator != membership.member @ SupportError::SelfSupport,
+    )]
     pub support_config: Box<Account<'info, SupportConfig>>,
     #[account(seeds = [PLAN_SEED, plan.creator.as_ref(), &plan.index.to_le_bytes()], bump = plan.bump, constraint = plan.creator == support_config.creator @ SupportError::PlanCreatorMismatch)]
     pub plan: Box<Account<'info, MembershipPlan>>,
@@ -935,7 +943,13 @@ pub struct Gift<'info> {
     pub fan: Signer<'info>,
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Account<'info, GlobalConfig>,
-    #[account(seeds = [CREATOR_SEED, support_config.creator.as_ref()], bump = support_config.bump)]
+    // SEC-5: a creator paying themselves would emit full income while the
+    // token program treats the transfer as a no-op.
+    #[account(
+        seeds = [CREATOR_SEED, support_config.creator.as_ref()],
+        bump = support_config.bump,
+        constraint = support_config.creator != fan.key() @ SupportError::SelfSupport,
+    )]
     pub support_config: Account<'info, SupportConfig>,
     #[account(address = global.usdc_mint @ SupportError::WrongMint)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
@@ -1014,7 +1028,11 @@ pub struct ChargeMembershipPeriod<'info> {
     pub member: Signer<'info>,
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Account<'info, GlobalConfig>,
-    #[account(seeds = [CREATOR_SEED, support_config.creator.as_ref()], bump = support_config.bump)]
+    #[account(
+        seeds = [CREATOR_SEED, support_config.creator.as_ref()],
+        bump = support_config.bump,
+        constraint = support_config.creator != member.key() @ SupportError::SelfSupport,
+    )]
     pub support_config: Account<'info, SupportConfig>,
     #[account(
         seeds = [PLAN_SEED, support_config.creator.as_ref(), &plan.index.to_le_bytes()],
@@ -1233,6 +1251,8 @@ pub enum SupportError {
     MandateExpired,
     #[msg("This USDC account already grants permission to another application; revoke it in your wallet first")]
     OtherDelegate,
+    #[msg("A creator cannot send support to their own page")]
+    SelfSupport,
 }
 
 #[cfg(test)]

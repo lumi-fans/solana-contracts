@@ -12,7 +12,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-2 | Medium | `initialize` is first-come; no `set_admin` or `set_treasury` | Fixed (contracts `set_treasury`/`propose_admin`/`accept_admin` + upgrade-authority gate; app commit pending) | `security.test.ts` SEC-2 (three cases) |
 | SEC-3 | Medium | Monthly periods anchor to the join day, so a late payment can buy one day | Fixed (grace window keeps the anniversary; a later payment re-anchors) | `security.test.ts` SEC-3 (lapsed and in-grace cases); `calendar_properties.rs` calendar_alone_would_shorten… |
 | SEC-4 | Low | Rotation cooling does not defend against creator-key compromise, and the promised notice does not exist | Fixed (owner re-checked on every payment; request indexed, emailed and shown to admin; threat model reworded) | `security.test.ts` SEC-4; app `events.test.ts`, `indexer.test.ts`, `notices.test.ts` |
-| SEC-5 | Low | Self-gift and self-membership record full income while only the fee moves | Open | `security.test.ts` finding 5 |
+| SEC-5 | Low | Self-gift and self-membership record full income while only the fee moves | Fixed (`SelfSupport` on gifts, charges and renewals) | `security.test.ts` SEC-5 |
 | SEC-6 | Low | Creator pause does not stop a rotation being requested or applied | Open | `security.test.ts` finding 6 |
 | SEC-7 | Low | One delegate per USDC account makes renewal consents fungible across plans; no on-chain revoke | Open | `security.test.ts` finding 7 |
 | SEC-8 | Low | The registrar hot key can undo an admin's creator pause | Open | `security.test.ts` finding 8 |
@@ -94,7 +94,9 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 
 **Fix.** `constraint = fan.key() != support_config.creator @ SelfSupport` on `Gift`, the same for `member` on membership charges and renewals. One line each.
 
-**Pinned by.** `security.test.ts` "finding 5": a 100 USDC self-gift leaves the creator 0.1 USDC poorer and the event says 99.9 USDC was received.
+**Done (16 September 2026).** `Gift`, `ChargeMembershipPeriod`, `AuthorizeRenewal` and `ChargeRenewal` refuse a signer (or, for renewals, a membership member) equal to `support_config.creator` with `SelfSupport`. No event is emitted, so nothing reaches the statement.
+
+**Pinned by.** `security.test.ts` "SEC-5": a creator's self-gift and self-membership charge are both refused and neither balance moves.
 
 ### SEC-6 · Creator pause does not stop a rotation being requested or applied
 
