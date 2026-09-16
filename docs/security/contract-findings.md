@@ -2,7 +2,7 @@
 
 Scope: this program (`lumi-fans/solana-contracts`, commit `b05d647`, reviewed 16 September 2026 against app commit `b13809e`) and the registrar co-signing path in the app repository's `apps/api/src/registration.ts`. Paths under `apps/`, `packages/`, `scripts/`, `tests/protocol/`, `docs/runbooks/` and the `Q<n>` founder questions refer to the private app repository, which pins this one as the `programs/infx-support` submodule; `src/` and `tests/*.rs` paths are in this repository. Method: line-by-line read of every instruction and account constraint, a differential test of the calendar against an independent implementation, and real SBF transactions on a fixture-loaded validator for every behavioural claim below.
 
-Nothing found lets a third party move a fan's or creator's USDC without that person's signature. The findings are about what privileged keys can do, what the program promises versus what it checks, and how monthly timing treats a fan. A change to monthly-only periods is in progress; rows note where that changes the picture.
+Nothing found lets a third party move a fan's or creator's USDC without that person's signature. The findings are about what privileged keys can do, what the program promises versus what it checks, and how monthly timing treats a fan. All fifteen were worked on 16 September 2026, one commit per finding: twelve fixed in code, SEC-1 and SEC-9 mitigated by process with a founder question each (Q22, Q23), SEC-13 accepted. A change to monthly-only periods is in progress in the app; rows note where that changes the picture.
 
 ## Register
 
@@ -217,3 +217,4 @@ Recorded so the next reviewer does not redo it.
 | Date | Program commit | Reviewer | What |
 | --- | --- | --- | --- |
 | 2026-09-16 | `b05d647` | Claude Fable 5.1 for Mark | Full read of every instruction; calendar differential test; validator assertions for SEC-2 to SEC-8; register created. Monthly-only period change was in progress in a separate process and is not reflected. |
+| 2026-09-16 | `b05d647` → this commit | Claude Fable 5.1 for Mark | Fixes landed one commit per finding: SEC-2 (upgrade-authority gate, `set_treasury`, two-step admin), SEC-3 (grace window and re-anchoring), SEC-4 (payment-account owner check, rotation notice), SEC-5 (`SelfSupport`), SEC-6 (creator pause freezes rotations), SEC-7 (`revoke_renewal`), SEC-8 (registrar pause-only), SEC-10 (scheduled period start), SEC-11 (local-clock program id), SEC-12 (events), SEC-15 (classic mint only). SEC-1, SEC-9 and SEC-14 documented with runbooks and Q22/Q23. Every row re-checked against the new code; the app's validator suite runs 46 cases green. Deployed devnet still runs the pre-review program until the next release. |
