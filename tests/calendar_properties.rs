@@ -5,14 +5,14 @@
 //! `calendar` is a private module, so the source file is compiled into this
 //! test crate directly; `crate::SupportError` resolves through the re-export.
 
-pub use infx_support::SupportError;
+pub use lumi_support::SupportError;
 
 #[allow(dead_code)]
 #[path = "../src/calendar.rs"]
 mod calendar;
 
 use calendar::next_month;
-use infx_support::{split, BPS_DENOMINATOR, FEE_BPS, MAX_PLAN_PRICE, MIN_GIFT, MIN_PLAN_PRICE};
+use lumi_support::{split, BPS_DENOMINATOR, FEE_BPS, MAX_PLAN_PRICE, MIN_GIFT, MIN_PLAN_PRICE};
 
 const DAY: i64 = 86_400;
 

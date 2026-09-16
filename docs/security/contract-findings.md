@@ -1,6 +1,6 @@
 # Contract findings register
 
-Scope: this program (`lumi-fans/solana-contracts`, commit `b05d647`, reviewed 16 September 2026 against app commit `b13809e`) and the registrar co-signing path in the app repository's `apps/api/src/registration.ts`. Paths under `apps/`, `packages/`, `scripts/`, `tests/protocol/`, `docs/runbooks/` and the `Q<n>` founder questions refer to the private app repository, which pins this one as the `programs/infx-support` submodule; `src/` and `tests/*.rs` paths are in this repository. Method: line-by-line read of every instruction and account constraint, a differential test of the calendar against an independent implementation, and real SBF transactions on a fixture-loaded validator for every behavioural claim below.
+Scope: this program (`lumi-fans/solana-contracts`, commit `b05d647`, reviewed 16 September 2026 against app commit `b13809e`) and the registrar co-signing path in the app repository's `apps/api/src/registration.ts`. Paths under `apps/`, `packages/`, `scripts/`, `tests/protocol/`, `docs/runbooks/` and the `Q<n>` founder questions refer to the private app repository, which pins this one as the `programs/lumi-support` submodule; `src/` and `tests/*.rs` paths are in this repository. Method: line-by-line read of every instruction and account constraint, a differential test of the calendar against an independent implementation, and real SBF transactions on a fixture-loaded validator for every behavioural claim below.
 
 Nothing found lets a third party move a fan's or creator's USDC without that person's signature. The findings are about what privileged keys can do, what the program promises versus what it checks, and how monthly timing treats a fan. All fifteen were worked on 16 September 2026, one commit per finding: twelve fixed in code, SEC-1 and SEC-9 mitigated by process with a founder question each (Q22, Q23), SEC-13 accepted. A change to monthly-only periods is in progress in the app; rows note where that changes the picture.
 
@@ -133,7 +133,7 @@ A second pass on 16 September 2026 ran an adversarial sweep (`tests/protocol/src
 
 **Where.** `set_creator_paused` (`lib.rs:129-142`).
 
-**What.** Admin or registrar may set either value. The registrar is the one hot key INFx holds; if it leaks, the holder can pause every creator and can also unpause a creator the admin paused for cause.
+**What.** Admin or registrar may set either value. The registrar is the one hot key Lumi holds; if it leaks, the holder can pause every creator and can also unpause a creator the admin paused for cause.
 
 **Fix.** Registrar may set `paused = true` only; unpausing requires admin.
 
@@ -175,7 +175,7 @@ A second pass on 16 September 2026 ran an adversarial sweep (`tests/protocol/src
 
 **Fix.** Under `cfg(feature = "local-clock")` use a different `declare_id!`. Anchor refuses to run a program at an address other than its declared ID, so the accelerated artifact cannot execute at the public program address even if someone uploads it.
 
-**Done (16 September 2026).** The `local-clock` build declares `CnA1TVJUnVLzh5FgWwNcNcdT6MdiTRKGgkudHihUHVun`; the standard build keeps the public id. No keypair for the local id exists anywhere: the local validator loads the program at genesis by address. The app's local stack deploys and initialises at that id (`scripts/local/stack.ts`), the chain client exports it as `INFX_SUPPORT_LOCAL_CLOCK_PROGRAM_ID`, and the browser's address check accepts it only when the cluster is `localnet` (`apps/web/src/lib/support-flow.ts`).
+**Done (16 September 2026).** The `local-clock` build declares `CnA1TVJUnVLzh5FgWwNcNcdT6MdiTRKGgkudHihUHVun`; the standard build keeps the public id. No keypair for the local id exists anywhere: the local validator loads the program at genesis by address. The app's local stack deploys and initialises at that id (`scripts/local/stack.ts`), the chain client exports it as `LUMI_SUPPORT_LOCAL_CLOCK_PROGRAM_ID`, and the browser's address check accepts it only when the cluster is `localnet` (`apps/web/src/lib/support-flow.ts`).
 
 **Pinned by.** `tests/program_id.rs`: the standard build declares the public id and the feature build declares the local one (`LUMI_LOCAL_RENEWAL_SECONDS=5 cargo test --features local-clock`). App `support-flow.test.ts` "SEC-11": the local id is refused off localnet.
 

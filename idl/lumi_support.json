@@ -1,10 +1,10 @@
 {
   "address": "GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv",
   "metadata": {
-    "name": "infx_support",
+    "name": "lumi_support",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "INFx direct support: gifts and membership charges, 99.9% to the creator and 0.1% to the treasury in one instruction"
+    "description": "Lumi direct support: gifts and membership charges, 99.9% to the creator and 0.1% to the treasury in one instruction"
   },
   "instructions": [
     {
@@ -81,7 +81,8 @@
       "name": "apply_payment_account_rotation",
       "docs": [
         "Anyone may apply a rotation once the cooling period has passed; only",
-        "the creator's earlier signature decided what it is."
+        "the creator's earlier signature decided what it is. Not while the",
+        "creator or the protocol is paused."
       ],
       "discriminator": [
         88,
@@ -545,8 +546,20 @@
         "time. A charge cannot exceed the plan price, cannot happen inside the",
         "period, and cannot happen on a closed plan or a paused creator.",
         "",
+        "`last_charged_at` is the start of the paid period, not the wall-clock",
+        "time of the payment. A monthly payment inside `GRACE_SECONDS` of its",
+        "due date keeps the anniversary; a later one re-anchors the membership",
+        "to the payment date, so a member never buys less than a month (SEC-3).",
+        "",
         "Paying again after cancelling is a deliberate act by the member and",
-        "re-activates the membership."
+        "re-activates the membership.",
+        "",
+        "If the member's renewal mandate for this plan is passed and is live for",
+        "the period being paid, the manual payment counts as that period's",
+        "renewal: the mandate's counter stays level with the membership and its",
+        "schedule moves on a month, so the keeper neither charges the same",
+        "period again nor finds a mandate it can never use (SEC-17). The",
+        "mandate's remaining automatic payments are not consumed."
       ],
       "discriminator": [
         156,
@@ -684,6 +697,36 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "mandate",
+          "docs": [
+            "The member's renewal mandate for this plan, when one exists (SEC-17).",
+            "Optional so a first payment and clients without renewals need not",
+            "pass it; the seeds bind it to this membership."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  110,
+                  101,
+                  119,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "membership"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -891,7 +934,7 @@
       "docs": [
         "A membership plan: a price per period and the hash of the benefits",
         "description shown to members. The hash is a record, not a contract:",
-        "INFx does not enforce it (ADR 0007)."
+        "Lumi does not enforce it (ADR 0007)."
       ],
       "discriminator": [
         242,
@@ -1138,7 +1181,12 @@
           }
         },
         {
-          "name": "usdc_mint"
+          "name": "usdc_mint",
+          "docs": [
+            "SEC-15: USDC is a classic SPL Token mint. A Token-2022 mint could carry",
+            "a transfer-fee extension that makes emitted amounts overstate what",
+            "arrives, so the program refuses any other token program here."
+          ]
         },
         {
           "name": "treasury_usdc_account"
@@ -1253,7 +1301,7 @@
     {
       "name": "register_creator",
       "docs": [
-        "Registers a verified creator. Both the INFx registrar and the creator",
+        "Registers a verified creator. Both the Lumi registrar and the creator",
         "sign: the registrar attests to verification, the creator attests to the",
         "payment account. Neither can do it alone."
       ],
@@ -1405,9 +1453,168 @@
       "args": []
     },
     {
+      "name": "revoke_renewal",
+      "docs": [
+        "Withdraws the renewal consent for one plan and keeps the membership",
+        "(SEC-7). The mandate is zeroed, which alone guarantees no further",
+        "automatic charge, and the shared token allowance is reduced by this",
+        "mandate's remaining share so the wallet shows only what other plans",
+        "may still use. If that leaves nothing, the delegate is cleared."
+      ],
+      "discriminator": [
+        60,
+        32,
+        214,
+        14,
+        237,
+        195,
+        169,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "member",
+          "signer": true,
+          "relations": [
+            "membership",
+            "mandate"
+          ]
+        },
+        {
+          "name": "plan",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "plan.creator",
+                "account": "MembershipPlan"
+              },
+              {
+                "kind": "account",
+                "path": "plan.index",
+                "account": "MembershipPlan"
+              }
+            ]
+          },
+          "relations": [
+            "membership",
+            "mandate"
+          ]
+        },
+        {
+          "name": "membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "plan"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mandate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  110,
+                  101,
+                  119,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "membership"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member_usdc_account",
+          "writable": true
+        },
+        {
+          "name": "delegate",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  110,
+                  101,
+                  119,
+                  97,
+                  108,
+                  45,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "member_usdc_account"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "set_creator_paused",
       "docs": [
-        "The registrar or the admin can pause a creator: no new gifts or charges."
+        "The registrar or the admin can pause a creator: no new gifts or charges.",
+        "Only the admin can unpause (SEC-8): the registrar is a hot key, and a",
+        "leaked one must not be able to reverse an enforcement pause."
       ],
       "discriminator": [
         70,
@@ -1900,6 +2107,19 @@
       ]
     },
     {
+      "name": "PaymentAccountRotationCancelled",
+      "discriminator": [
+        2,
+        242,
+        31,
+        114,
+        201,
+        67,
+        19,
+        206
+      ]
+    },
+    {
       "name": "PaymentAccountRotationRequested",
       "discriminator": [
         122,
@@ -1910,6 +2130,19 @@
         211,
         56,
         131
+      ]
+    },
+    {
+      "name": "PlanActiveChanged",
+      "discriminator": [
+        144,
+        150,
+        208,
+        53,
+        102,
+        29,
+        90,
+        52
       ]
     },
     {
@@ -1949,6 +2182,32 @@
         124,
         172,
         110
+      ]
+    },
+    {
+      "name": "RegistrarChanged",
+      "discriminator": [
+        50,
+        193,
+        15,
+        230,
+        46,
+        78,
+        164,
+        26
+      ]
+    },
+    {
+      "name": "RenewalRevoked",
+      "discriminator": [
+        223,
+        90,
+        77,
+        131,
+        103,
+        45,
+        130,
+        1
       ]
     },
     {
@@ -2073,6 +2332,16 @@
       "code": 6018,
       "name": "OtherDelegate",
       "msg": "This USDC account already grants permission to another application; revoke it in your wallet first"
+    },
+    {
+      "code": 6019,
+      "name": "SelfSupport",
+      "msg": "A creator cannot send support to their own page"
+    },
+    {
+      "code": 6020,
+      "name": "UnsupportedTokenProgram",
+      "msg": "The mint must belong to the classic SPL Token program"
     }
   ],
   "types": [
@@ -2343,6 +2612,18 @@
       }
     },
     {
+      "name": "PaymentAccountRotationCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "PaymentAccountRotationRequested",
       "type": {
         "kind": "struct",
@@ -2358,6 +2639,22 @@
           {
             "name": "effective_at",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlanActiveChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "active",
+            "type": "bool"
           }
         ]
       }
@@ -2433,6 +2730,22 @@
       }
     },
     {
+      "name": "RegistrarChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "previous_registrar",
+            "type": "pubkey"
+          },
+          {
+            "name": "registrar",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "RenewalMandate",
       "type": {
         "kind": "struct",
@@ -2481,6 +2794,26 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RenewalRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
           }
         ]
       }
