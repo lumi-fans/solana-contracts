@@ -4,6 +4,8 @@ Scope: this program (`lumi-fans/solana-contracts`, commit `b05d647`, reviewed 16
 
 Nothing found lets a third party move a fan's or creator's USDC without that person's signature. The findings are about what privileged keys can do, what the program promises versus what it checks, and how monthly timing treats a fan. All fifteen were worked on 16 September 2026, one commit per finding: twelve fixed in code, SEC-1 and SEC-9 mitigated by process with a founder question each (Q22, Q23), SEC-13 accepted. A change to monthly-only periods is in progress in the app; rows note where that changes the picture.
 
+A second pass on 16 September 2026 ran an adversarial sweep (`tests/protocol/src/adversarial.test.ts` in the app repository): arithmetic overflow, stripped signatures, account type cosplay, token-program substitution, random and shuffled instruction data, a frozen treasury, forged timestamps and consent-state edge cases. It found no way to move money without the payer's consent and added SEC-16 and SEC-17, both about renewal consent state.
+
 ## Register
 
 | ID | Severity | Title | Status | Pinned by |
@@ -23,6 +25,8 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-13 | Informational | Program accounts are never closable; member rent is locked forever | Accepted for v0 | n/a |
 | SEC-14 | Informational | Registrar co-signature would replay across clusters if the key were reused | Documented rule: one registrar key per cluster (`rotate-registrar.md`) | n/a |
 | SEC-15 | Informational | A Token-2022 mint with transfer fees would make events overstate what arrived | Fixed (`initialize` accepts only a classic SPL Token mint) | `security.test.ts` SEC-2/SEC-15 |
+| SEC-16 | Low | A revoked mandate pins its source account, so a member cannot re-consent from another USDC account | Open; fix proposed | `adversarial.test.ts` SEC-16 |
+| SEC-17 | Low | A manual payment inside the grace window strands a live mandate while its allowance stays delegated | Open; fix proposed | `adversarial.test.ts` SEC-17 |
 
 ## Details
 
@@ -200,6 +204,30 @@ The program accepts either token program for accounts. If the USDC mint were eve
 
 **Done (16 September 2026).** `initialize` refuses a mint not owned by the classic SPL Token program with `UnsupportedTokenProgram`, so a transfer-fee mint cannot be configured by mistake. Pinned by `security.test.ts` "SEC-2": a structurally valid Token-2022 mint is refused by the upgrade authority before the classic mint succeeds.
 
+### SEC-16 · A revoked mandate pins its source account
+
+**Where.** `authorize_renewal` (`lib.rs:461-473`), `revoke_renewal` (`lib.rs:510`).
+
+**What.** `authorize_renewal` refuses a consent whose source token account differs from the one already stored on the mandate, so that a new consent cannot silently move a live mandate to another account. `revoke_renewal` zeroes `remaining` but leaves `source` in place. A member who stopped renewals and later wants to renew from a different USDC account is refused with `InvalidMandate` for that plan for ever; only the original account is accepted.
+
+**Impact.** Consent hygiene, no money at risk. For most wallets the source is the associated token account, whose address is fixed per wallet, so a closed and re-created account has the same address and the check passes. A member who used a secondary token account, or a wallet that moved its USDC to a new account, cannot turn renewals back on for that plan without moving USDC back.
+
+**Fix.** Allow the source to change when the mandate holds no remaining payments: `mandate.source == Pubkey::default() || mandate.source == source.key() || mandate.remaining == 0`. `previous` is already zero in that case, so the allowance arithmetic is unchanged. One line.
+
+**Pinned by.** `adversarial.test.ts` "SEC-16": with a revoked mandate on account A, consent from account B is refused and B is left undelegated; consent from A still works.
+
+### SEC-17 · A manual payment inside the grace window strands a live mandate
+
+**Where.** `charge_membership_period` (`lib.rs:325`), `charge_renewal` (`lib.rs:571`), app `apps/web/src/pages/creator-page.tsx` ("Pay the next period" is enabled from the due date), app `apps/chain-indexer/src/renewals.ts:340`.
+
+**What.** `charge_renewal` requires `mandate.periods_paid == membership.periods_paid`, which correctly stops a manual payment and an automatic renewal from both landing in one window. The manual path does not take the mandate account, so it cannot advance it. If a member with a live mandate pays by hand between the due time and the keeper's run (the button is enabled from the due date, and the keeper lands some time inside the 72-hour window), the membership's counter moves one ahead of the mandate's and nothing ever brings them level again. The mandate keeps its `remaining` payments and the wallet keeps the full allowance delegated, but no later renewal can charge. The keeper throws "Membership and mandate periods differ" and the queue retries it with backoff until the dead-letter queue takes it; the renewal card shows the mandate as not active because its own check fails.
+
+**Impact.** The member believes renewals are on and the membership lapses a month later; the delegated allowance for a mandate that can never be used stays on the wallet until the member re-consents (which resets it) or revokes. No overcharge is possible.
+
+**Fix.** Either (a) make the mandate an optional account of `charge_membership_period` and, when present and live, treat the manual payment as that period's renewal (advance `next_charge_at`, decrement `remaining`, keep the counters level); or (b) keep the program as it is and in the app refuse the manual button while a live mandate is inside its window, and have the keeper stop the mandate with a member notice when it sees the mismatch instead of retrying. (a) is cleaner on chain; (b) needs no program change. Either way the keeper should stop, not retry, on a counter mismatch.
+
+**Pinned by.** `adversarial.test.ts` "SEC-17": a member with a three-payment mandate due an hour ago pays by hand; the payment lands at the due date, the keeper is then refused with `InvalidMandate`, the mandate still shows three remaining and the account still delegates three payments.
+
 ## What holds up
 
 Recorded so the next reviewer does not redo it.
@@ -210,6 +238,7 @@ Recorded so the next reviewer does not redo it.
 - **No held balance.** The program owns no token account and has no instruction that moves USDC anywhere but the registered payment account and the fixed treasury.
 - **Double-charge protection.** A mandate is valid only while `mandate.periods_paid == membership.periods_paid`, so a manual payment and an automatic renewal in the same window cannot both land; the 72-hour window forbids catch-up debt; `remaining` and the twelve-payment cap bound exposure.
 - **Pause coverage.** The global pause blocks every money-moving and state-creating instruction and leaves cancellation open.
+- **Adversarial sweep (16 September 2026, `adversarial.test.ts`, 19 cases on a fixture-loaded validator).** Gift amounts of `u64::MAX`, `u64::MAX / 10 + 1` and `2^63` fail with `MathOverflow` before any transfer; an in-range amount beyond the balance fails in the token program with nothing partially paid; landed gifts always split as floor(amount / 1000) to the treasury and the rest to the creator. A wallet that has already delegated `u64::MAX` to the renewal PDA is refused at `authorize_renewal` with `MathOverflow` (self-inflicted only). Plan prices and periods at both ends of their types, including `i64::MIN` and `i64::MAX`, and renewal counts of 0, 13 and `u16::MAX` are refused with the range errors. Forged `last_charged_at` near `i64::MAX` and a join date past the calendar's year-2200 bound fail with an error, not a panic. A gift whose fan is not marked as a signer, program accounts passed in the wrong slot (plan as config, config as global, another member's membership, a membership as a mandate, a plan under another creator's config), and any token program other than the classic one are all refused. A payment account closed and re-created for another mint at the registered address passes the program's address and owner checks and is stopped by the token program's mint check with nothing moved. Sixty rounds of random argument bytes across every instruction, forty rounds of shuffled gift accounts and every truncation of the gift data produced an error and never a panic or abort. Freezing the treasury reverts the whole gift, so the creator is never paid without the fee. Two renewal charges or two manual charges in one transaction fail as a whole with `PeriodNotElapsed`.
 - **Co-signing.** `apps/api/src/registration.ts` accepts exactly one legacy `register_creator` instruction with fixed accounts and flags, the creator as fee payer with a verified signature, and signs nothing else.
 
 ## Review log
@@ -218,3 +247,4 @@ Recorded so the next reviewer does not redo it.
 | --- | --- | --- | --- |
 | 2026-09-16 | `b05d647` | Claude Fable 5.1 for Mark | Full read of every instruction; calendar differential test; validator assertions for SEC-2 to SEC-8; register created. Monthly-only period change was in progress in a separate process and is not reflected. |
 | 2026-09-16 | `b05d647` → this commit | Claude Fable 5.1 for Mark | Fixes landed one commit per finding: SEC-2 (upgrade-authority gate, `set_treasury`, two-step admin), SEC-3 (grace window and re-anchoring), SEC-4 (payment-account owner check, rotation notice), SEC-5 (`SelfSupport`), SEC-6 (creator pause freezes rotations), SEC-7 (`revoke_renewal`), SEC-8 (registrar pause-only), SEC-10 (scheduled period start), SEC-11 (local-clock program id), SEC-12 (events), SEC-15 (classic mint only). SEC-1, SEC-9 and SEC-14 documented with runbooks and Q22/Q23. Every row re-checked against the new code; the app's validator suite runs 46 cases green. Deployed devnet still runs the pre-review program until the next release. |
+| 2026-09-16 | `d0fe173` | Claude Fable 5.1 for Mark | Adversarial sweep at Mark's request (app `tests/protocol/src/adversarial.test.ts`, 19 cases): overflow, signatures, type cosplay, token-program substitution, random and shuffled instruction data, frozen treasury, forged timestamps, double charging, consent state. No fund-loss path. SEC-16 and SEC-17 added, both open with proposed fixes. |
