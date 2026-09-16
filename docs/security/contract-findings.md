@@ -14,7 +14,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-4 | Low | Rotation cooling does not defend against creator-key compromise, and the promised notice does not exist | Fixed (owner re-checked on every payment; request indexed, emailed and shown to admin; threat model reworded) | `security.test.ts` SEC-4; app `events.test.ts`, `indexer.test.ts`, `notices.test.ts` |
 | SEC-5 | Low | Self-gift and self-membership record full income while only the fee moves | Fixed (`SelfSupport` on gifts, charges and renewals) | `security.test.ts` SEC-5 |
 | SEC-6 | Low | Creator pause does not stop a rotation being requested or applied | Fixed (`CreatorPaused` on request and apply) | `security.test.ts` SEC-6 |
-| SEC-7 | Low | One delegate per USDC account makes renewal consents fungible across plans; no on-chain revoke | Open | `security.test.ts` finding 7 |
+| SEC-7 | Low | One delegate per USDC account makes renewal consents fungible across plans; no on-chain revoke | Fixed (`revoke_renewal` per plan; wallet-level revoke documented as all-or-nothing) | `security.test.ts` SEC-7 |
 | SEC-8 | Low | The registrar hot key can undo an admin's creator pause | Open | `security.test.ts` finding 8 |
 | SEC-9 | Low | A pause, a closed plan or a benefits update longer than 72 hours silently voids every live mandate | Open | `renewals.test.ts` expired case (partial) |
 | SEC-10 | Low | Membership records the actual charge time while the mandate advances from schedule; re-consent after a late renewal can skip a month | Open | `calendar_properties.rs` late_renewal_across… |
@@ -120,7 +120,9 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 
 **Fix.** Add `revoke_renewal` (member signs; sets `remaining = 0` and re-approves the delegate for the allowance minus this mandate's share). Let `cancel_membership` take the mandate as an optional account and do the same. Have the UI's "stop auto-renew" call it. Document that wallet-level revoke is all-or-nothing.
 
-**Pinned by.** `security.test.ts` "finding 7".
+**Done (16 September 2026).** New `revoke_renewal` (member signs): zeroes the mandate's `remaining`, which alone guarantees no further automatic charge for that plan, and re-approves the shared delegate for the current allowance minus that mandate's remaining share, clearing the delegate when nothing is left. The membership is untouched. The web page's renewal card has a "Stop automatic renewal" button (`apps/web/src/components/renewal.tsx`, `revokeRenewalInstruction`), and the fan guide says a wallet-level revoke stops every plan at once and that a later consent for any plan restores the allowance for every plan not stopped or cancelled. Known limit of a shared allowance: if a member revoked in their wallet earlier, a per-plan revoke may leave another plan under-allowanced; the page shows that plan as needing fresh permission.
+
+**Pinned by.** `security.test.ts` "SEC-7": with two consents on one USDC account, stopping plan 0 leaves plan 1's share and mandate intact, the keeper can no longer charge plan 0, the membership is not cancelled, and stopping the last plan clears the delegate.
 
 ### SEC-8 · The registrar hot key can undo an admin's creator pause
 

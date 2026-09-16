@@ -481,6 +481,58 @@ pub mod infx_support {
         Ok(())
     }
 
+    /// Withdraws the renewal consent for one plan and keeps the membership
+    /// (SEC-7). The mandate is zeroed, which alone guarantees no further
+    /// automatic charge, and the shared token allowance is reduced by this
+    /// mandate's remaining share so the wallet shows only what other plans
+    /// may still use. If that leaves nothing, the delegate is cleared.
+    pub fn revoke_renewal(ctx: Context<RevokeRenewal>) -> Result<()> {
+        let mandate = &mut ctx.accounts.mandate;
+        let share = mandate
+            .price
+            .checked_mul(u64::from(mandate.remaining))
+            .ok_or(SupportError::MathOverflow)?;
+        mandate.remaining = 0;
+        let source = &ctx.accounts.member_usdc_account;
+        let ours = matches!(
+            source.delegate,
+            anchor_lang::solana_program::program_option::COption::Some(delegate)
+                if delegate == ctx.accounts.delegate.key()
+        );
+        if ours {
+            let allowance = source.delegated_amount.saturating_sub(share);
+            if allowance == 0 {
+                token_interface::revoke(CpiContext::new(
+                    ctx.accounts.token_program.to_account_info(),
+                    token_interface::Revoke {
+                        source: source.to_account_info(),
+                        authority: ctx.accounts.member.to_account_info(),
+                    },
+                ))?;
+            } else {
+                token_interface::approve_checked(
+                    CpiContext::new(
+                        ctx.accounts.token_program.to_account_info(),
+                        ApproveChecked {
+                            to: source.to_account_info(),
+                            mint: ctx.accounts.usdc_mint.to_account_info(),
+                            delegate: ctx.accounts.delegate.to_account_info(),
+                            authority: ctx.accounts.member.to_account_info(),
+                        },
+                    ),
+                    allowance,
+                    ctx.accounts.usdc_mint.decimals,
+                )?;
+            }
+        }
+        emit!(RenewalRevoked {
+            plan: mandate.plan,
+            member: mandate.member,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
     /// Permissionless submission: caller pays SOL but can only execute the exact
     /// signed mandate. Chain time and account locks prevent early/duplicate charges.
     pub fn charge_renewal(ctx: Context<ChargeRenewal>) -> Result<()> {
@@ -790,6 +842,25 @@ pub struct AuthorizeRenewal<'info> {
     pub usdc_mint: InterfaceAccount<'info, Mint>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RevokeRenewal<'info> {
+    pub member: Signer<'info>,
+    #[account(seeds = [PLAN_SEED, plan.creator.as_ref(), &plan.index.to_le_bytes()], bump = plan.bump)]
+    pub plan: Box<Account<'info, MembershipPlan>>,
+    #[account(seeds = [MEMBERSHIP_SEED, plan.key().as_ref(), member.key().as_ref()], bump = membership.bump, has_one = member, has_one = plan)]
+    pub membership: Box<Account<'info, Membership>>,
+    #[account(mut, seeds = [b"renewal", membership.key().as_ref()], bump = mandate.bump, has_one = plan, has_one = member @ SupportError::Unauthorized)]
+    pub mandate: Box<Account<'info, RenewalMandate>>,
+    #[account(mut, address = mandate.source, constraint = member_usdc_account.owner == member.key() @ SupportError::Unauthorized)]
+    pub member_usdc_account: InterfaceAccount<'info, TokenAccount>,
+    /// CHECK: PDA authority; the seeds fix the only delegate this program uses.
+    #[account(seeds = [b"renewal-delegate", member_usdc_account.key().as_ref()], bump)]
+    pub delegate: UncheckedAccount<'info>,
+    #[account(address = member_usdc_account.mint @ SupportError::WrongMint)]
+    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
@@ -1194,6 +1265,13 @@ pub struct MembershipCharged {
     pub creator_amount: u64,
     pub treasury_amount: u64,
     pub period_index: u32,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct RenewalRevoked {
+    pub plan: Pubkey,
+    pub member: Pubkey,
     pub timestamp: i64,
 }
 
