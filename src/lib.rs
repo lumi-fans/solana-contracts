@@ -178,11 +178,13 @@ pub mod infx_support {
     }
 
     /// The registrar or the admin can pause a creator: no new gifts or charges.
+    /// Only the admin can unpause (SEC-8): the registrar is a hot key, and a
+    /// leaked one must not be able to reverse an enforcement pause.
     pub fn set_creator_paused(ctx: Context<SetCreatorPaused>, paused: bool) -> Result<()> {
         let signer = ctx.accounts.authority.key();
         let global = &ctx.accounts.global;
         require!(
-            signer == global.admin || signer == global.registrar,
+            signer == global.admin || (signer == global.registrar && paused),
             SupportError::Unauthorized
         );
         ctx.accounts.support_config.paused = paused;

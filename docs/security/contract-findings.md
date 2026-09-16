@@ -15,7 +15,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-5 | Low | Self-gift and self-membership record full income while only the fee moves | Fixed (`SelfSupport` on gifts, charges and renewals) | `security.test.ts` SEC-5 |
 | SEC-6 | Low | Creator pause does not stop a rotation being requested or applied | Fixed (`CreatorPaused` on request and apply) | `security.test.ts` SEC-6 |
 | SEC-7 | Low | One delegate per USDC account makes renewal consents fungible across plans; no on-chain revoke | Fixed (`revoke_renewal` per plan; wallet-level revoke documented as all-or-nothing) | `security.test.ts` SEC-7 |
-| SEC-8 | Low | The registrar hot key can undo an admin's creator pause | Open | `security.test.ts` finding 8 |
+| SEC-8 | Low | The registrar hot key can undo an admin's creator pause | Fixed (registrar may only set `paused = true`) | `security.test.ts` SEC-8 |
 | SEC-9 | Low | A pause, a closed plan or a benefits update longer than 72 hours silently voids every live mandate | Open | `renewals.test.ts` expired case (partial) |
 | SEC-10 | Low | Membership records the actual charge time while the mandate advances from schedule; re-consent after a late renewal can skip a month | Open | `calendar_properties.rs` late_renewal_across… |
 | SEC-11 | Low | The `local-clock` artifact is only distinguishable from the real one by hash | Open | untested (build) |
@@ -132,7 +132,9 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 
 **Fix.** Registrar may set `paused = true` only; unpausing requires admin.
 
-**Pinned by.** `security.test.ts` "finding 8".
+**Done (16 September 2026).** `set_creator_paused` accepts the registrar only when `paused` is true; unpausing needs the admin. `docs/runbooks/rotate-registrar.md` is unaffected: a leaked registrar can still pause creators (a DoS the admin reverses by unpausing and rotating the key), but cannot reopen a creator the admin closed.
+
+**Pinned by.** `security.test.ts` "SEC-8": the registrar pauses a creator, cannot unpause, an unrelated key cannot either, the admin can.
 
 ### SEC-9 · A pause, a closed plan or a benefits update longer than 72 hours silently voids every live mandate
 
