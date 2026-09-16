@@ -13,7 +13,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-3 | Medium | Monthly periods anchor to the join day, so a late payment can buy one day | Fixed (grace window keeps the anniversary; a later payment re-anchors) | `security.test.ts` SEC-3 (lapsed and in-grace cases); `calendar_properties.rs` calendar_alone_would_shorten… |
 | SEC-4 | Low | Rotation cooling does not defend against creator-key compromise, and the promised notice does not exist | Fixed (owner re-checked on every payment; request indexed, emailed and shown to admin; threat model reworded) | `security.test.ts` SEC-4; app `events.test.ts`, `indexer.test.ts`, `notices.test.ts` |
 | SEC-5 | Low | Self-gift and self-membership record full income while only the fee moves | Fixed (`SelfSupport` on gifts, charges and renewals) | `security.test.ts` SEC-5 |
-| SEC-6 | Low | Creator pause does not stop a rotation being requested or applied | Open | `security.test.ts` finding 6 |
+| SEC-6 | Low | Creator pause does not stop a rotation being requested or applied | Fixed (`CreatorPaused` on request and apply) | `security.test.ts` SEC-6 |
 | SEC-7 | Low | One delegate per USDC account makes renewal consents fungible across plans; no on-chain revoke | Open | `security.test.ts` finding 7 |
 | SEC-8 | Low | The registrar hot key can undo an admin's creator pause | Open | `security.test.ts` finding 8 |
 | SEC-9 | Low | A pause, a closed plan or a benefits update longer than 72 hours silently voids every live mandate | Open | `renewals.test.ts` expired case (partial) |
@@ -106,7 +106,9 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 
 **Fix.** `require!(!config.paused, SupportError::CreatorPaused)` in both. Cancelling stays allowed while paused.
 
-**Pinned by.** `security.test.ts` "finding 6": a paused creator's pending rotation is applied by anyone.
+**Done (16 September 2026).** `request_payment_account_rotation` and `apply_payment_account_rotation` require `!support_config.paused`. Cancelling stays allowed while paused. The pause-creator runbook now says the on-chain pause is what freezes a pending rotation.
+
+**Pinned by.** `security.test.ts` "SEC-6": while paused, neither the creator's request nor anyone's apply changes the payment account; once the admin unpauses, the cooled-down rotation applies.
 
 ### SEC-7 · One delegate per USDC account makes renewal consents fungible across plans; no on-chain revoke
 

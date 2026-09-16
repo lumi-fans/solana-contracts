@@ -580,6 +580,12 @@ pub mod infx_support {
         ctx: Context<RequestPaymentAccountRotation>,
     ) -> Result<()> {
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
+        // SEC-6: a paused creator (the remedy for a suspected key compromise)
+        // cannot move where they are paid until unpaused.
+        require!(
+            !ctx.accounts.support_config.paused,
+            SupportError::CreatorPaused
+        );
         let now = Clock::get()?.unix_timestamp;
         let config = &mut ctx.accounts.support_config;
         config.pending_payment_account = ctx.accounts.new_payment_account.key();
@@ -604,9 +610,14 @@ pub mod infx_support {
     }
 
     /// Anyone may apply a rotation once the cooling period has passed; only
-    /// the creator's earlier signature decided what it is.
+    /// the creator's earlier signature decided what it is. Not while the
+    /// creator or the protocol is paused.
     pub fn apply_payment_account_rotation(ctx: Context<ApplyPaymentAccountRotation>) -> Result<()> {
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
+        require!(
+            !ctx.accounts.support_config.paused,
+            SupportError::CreatorPaused
+        );
         let now = Clock::get()?.unix_timestamp;
         let config = &mut ctx.accounts.support_config;
         require!(
