@@ -4,7 +4,7 @@ Scope: this program (`lumi-fans/solana-contracts`, commit `b05d647`, reviewed 16
 
 Nothing found lets a third party move a fan's or creator's USDC without that person's signature. The findings are about what privileged keys can do, what the program promises versus what it checks, and how monthly timing treats a fan. All fifteen were worked on 16 September 2026, one commit per finding: twelve fixed in code, SEC-1 and SEC-9 mitigated by process with a founder question each (Q22, Q23), SEC-13 accepted. A change to monthly-only periods is in progress in the app; rows note where that changes the picture.
 
-A second pass on 16 September 2026 ran an adversarial sweep (`tests/protocol/src/adversarial.test.ts` in the app repository): arithmetic overflow, stripped signatures, account type cosplay, token-program substitution, random and shuffled instruction data, a frozen treasury, forged timestamps and consent-state edge cases. It found no way to move money without the payer's consent and added SEC-16 and SEC-17, both about renewal consent state.
+A second pass on 16 September 2026 ran an adversarial sweep (`tests/protocol/src/adversarial.test.ts` in the app repository): arithmetic overflow, stripped signatures, account type cosplay, token-program substitution, random and shuffled instruction data, a frozen treasury, forged timestamps and consent-state edge cases. It found no way to move money without the payer's consent and added SEC-16 and SEC-17, both about renewal consent state; fixing SEC-17 surfaced SEC-18, a build-time hazard. All three were fixed the same day.
 
 ## Register
 
@@ -25,8 +25,9 @@ A second pass on 16 September 2026 ran an adversarial sweep (`tests/protocol/src
 | SEC-13 | Informational | Program accounts are never closable; member rent is locked forever | Accepted for v0 | n/a |
 | SEC-14 | Informational | Registrar co-signature would replay across clusters if the key were reused | Documented rule: one registrar key per cluster (`rotate-registrar.md`) | n/a |
 | SEC-15 | Informational | A Token-2022 mint with transfer fees would make events overstate what arrived | Fixed (`initialize` accepts only a classic SPL Token mint) | `security.test.ts` SEC-2/SEC-15 |
-| SEC-16 | Low | A revoked mandate pins its source account, so a member cannot re-consent from another USDC account | Open; fix proposed | `adversarial.test.ts` SEC-16 |
-| SEC-17 | Low | A manual payment inside the grace window strands a live mandate while its allowance stays delegated | Open; fix proposed | `adversarial.test.ts` SEC-17 |
+| SEC-16 | Low | A revoked mandate pins its source account, so a member cannot re-consent from another USDC account | Fixed (a mandate with nothing remaining accepts a new source) | `adversarial.test.ts` SEC-16 |
+| SEC-17 | Low | A manual payment inside the grace window strands a live mandate while its allowance stays delegated | Fixed (optional mandate account on `charge_membership_period`; keeper stops on a mismatch) | `adversarial.test.ts` SEC-17 (two cases); app `support-flow.test.ts` SEC-17 |
+| SEC-18 | Informational | Adding an account to `ChargeMembershipPeriod` pushed its validation frame past the SBF stack limit; the compiler only warns | Fixed (accounts boxed; the build fails on the warning) | `scripts/anchor-build.sh`; `adversarial.test.ts` manual-charge cases |
 
 ## Details
 
@@ -214,7 +215,9 @@ The program accepts either token program for accounts. If the USDC mint were eve
 
 **Fix.** Allow the source to change when the mandate holds no remaining payments: `mandate.source == Pubkey::default() || mandate.source == source.key() || mandate.remaining == 0`. `previous` is already zero in that case, so the allowance arithmetic is unchanged. One line.
 
-**Pinned by.** `adversarial.test.ts` "SEC-16": with a revoked mandate on account A, consent from account B is refused and B is left undelegated; consent from A still works.
+**Done (16 September 2026).** `authorize_renewal` accepts a different source when `mandate.remaining == 0`. A live mandate still cannot be moved.
+
+**Pinned by.** `adversarial.test.ts` "SEC-16": with a revoked mandate on account A, consent from account B is accepted, B is delegated for the new consent, A is untouched, and a second consent from A against the now-live mandate is refused.
 
 ### SEC-17 · A manual payment inside the grace window strands a live mandate
 
@@ -226,7 +229,21 @@ The program accepts either token program for accounts. If the USDC mint were eve
 
 **Fix.** Either (a) make the mandate an optional account of `charge_membership_period` and, when present and live, treat the manual payment as that period's renewal (advance `next_charge_at`, decrement `remaining`, keep the counters level); or (b) keep the program as it is and in the app refuse the manual button while a live mandate is inside its window, and have the keeper stop the mandate with a member notice when it sees the mismatch instead of retrying. (a) is cleaner on chain; (b) needs no program change. Either way the keeper should stop, not retry, on a counter mismatch.
 
-**Pinned by.** `adversarial.test.ts` "SEC-17": a member with a three-payment mandate due an hour ago pays by hand; the payment lands at the due date, the keeper is then refused with `InvalidMandate`, the mandate still shows three remaining and the account still delegates three payments.
+**Done (16 September 2026).** Option (a). `ChargeMembershipPeriod` takes the member's mandate as a trailing optional account (Anchor's program-id marker when absent, so a first payment and older clients are unaffected). When the mandate is present and live for the period being paid (monthly plan, counters level, payments remaining, terms unchanged, inside the 72-hour window) the manual payment counts as that period's renewal: the mandate's counter follows the membership and `next_charge_at` moves on a month. `remaining` is not consumed: the automatic payments the member consented to are still ahead of them, and the allowance already matches. A mandate that is exhausted, out of step, on changed terms or past its window is left alone (SEC-9 applies). The web flow looks the mandate up and passes it (`apps/web/src/lib/support-flow.ts`); `buildChargeMembershipPeriod` takes it as an option. The keeper now stops a job whose counters differ instead of retrying it into the dead-letter queue (`renewal_out_of_step`).
+
+**Pinned by.** `adversarial.test.ts` "SEC-17": with the mandate passed, a payment an hour after the due date lands at the due date, the mandate's counter reaches the membership's, its next charge is a calendar month on and it keeps three payments; the keeper is refused with `PeriodNotElapsed` and the allowance is unchanged. Without the mandate (an older client) the payment is still accepted and the mandate is left out of step. App `support-flow.test.ts` "SEC-17": the browser passes the mandate when the account exists and the program id when it does not.
+
+### SEC-18 · The charge instruction's account validation overran the SBF stack frame
+
+**Where.** `ChargeMembershipPeriod` (`lib.rs`), `scripts/anchor-build.sh` in the app repository.
+
+**What.** Adding the optional mandate account made Anchor's generated `try_accounts` for `ChargeMembershipPeriod` need 4,112 bytes of stack against a 4,096-byte frame. The SBF compiler prints "Stack offset of 4112 exceeded max offset of 4096 by 16 bytes ... may cause undefined behavior" and carries on. On the validator the effect was silent: every manual charge of an existing membership failed `Unauthorized` because `membership.member` was read from corrupted memory, while the account on chain was correct. Had the overrun landed a few bytes elsewhere it could have passed a check instead of failing one.
+
+**Impact.** None deployed: the build that is on devnet has no such warning. The hazard is that any future account added to a large instruction can reintroduce it and nothing in CI would object.
+
+**Fix.** Every account in `ChargeMembershipPeriod` is boxed, as `AuthorizeRenewal` and `ChargeRenewal` already were. `pnpm anchor:build` now runs `scripts/anchor-build.sh`, which fails the build on the compiler's stack-offset warning; CI's `pr-checks` uses that script.
+
+**Pinned by.** The build guard, and every manual-charge case in `adversarial.test.ts` and `security.test.ts`, which failed under the overrun.
 
 ## What holds up
 
@@ -248,3 +265,4 @@ Recorded so the next reviewer does not redo it.
 | 2026-09-16 | `b05d647` | Claude Fable 5.1 for Mark | Full read of every instruction; calendar differential test; validator assertions for SEC-2 to SEC-8; register created. Monthly-only period change was in progress in a separate process and is not reflected. |
 | 2026-09-16 | `b05d647` → this commit | Claude Fable 5.1 for Mark | Fixes landed one commit per finding: SEC-2 (upgrade-authority gate, `set_treasury`, two-step admin), SEC-3 (grace window and re-anchoring), SEC-4 (payment-account owner check, rotation notice), SEC-5 (`SelfSupport`), SEC-6 (creator pause freezes rotations), SEC-7 (`revoke_renewal`), SEC-8 (registrar pause-only), SEC-10 (scheduled period start), SEC-11 (local-clock program id), SEC-12 (events), SEC-15 (classic mint only). SEC-1, SEC-9 and SEC-14 documented with runbooks and Q22/Q23. Every row re-checked against the new code; the app's validator suite runs 46 cases green. Deployed devnet still runs the pre-review program until the next release. |
 | 2026-09-16 | `d0fe173` | Claude Fable 5.1 for Mark | Adversarial sweep at Mark's request (app `tests/protocol/src/adversarial.test.ts`, 19 cases): overflow, signatures, type cosplay, token-program substitution, random and shuffled instruction data, frozen treasury, forged timestamps, double charging, consent state. No fund-loss path. SEC-16 and SEC-17 added, both open with proposed fixes. |
+| 2026-09-16 | `e5339d2` → this commit | Claude Fable 5.1 for Mark | SEC-16 fixed (revoked mandate accepts a new source), SEC-17 fixed (optional mandate account on `charge_membership_period`, web passes it, keeper stops on mismatch), SEC-18 found and fixed while doing so (boxed `ChargeMembershipPeriod`, build fails on the SBF stack-offset warning). Adversarial, security, renewals and Anchor-client suites pass on the rebuilt program. |

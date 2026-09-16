@@ -322,6 +322,13 @@ pub mod infx_support {
     ///
     /// Paying again after cancelling is a deliberate act by the member and
     /// re-activates the membership.
+    ///
+    /// If the member's renewal mandate for this plan is passed and is live for
+    /// the period being paid, the manual payment counts as that period's
+    /// renewal: the mandate's counter stays level with the membership and its
+    /// schedule moves on a month, so the keeper neither charges the same
+    /// period again nor finds a mandate it can never use (SEC-17). The
+    /// mandate's remaining automatic payments are not consumed.
     pub fn charge_membership_period(ctx: Context<ChargeMembershipPeriod>) -> Result<()> {
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
         require!(
@@ -333,6 +340,7 @@ pub mod infx_support {
         let now = Clock::get()?.unix_timestamp;
         let plan = &ctx.accounts.plan;
         let membership = &mut ctx.accounts.membership;
+        let monthly = plan.period_seconds == MONTHLY_PERIOD_SECONDS;
 
         let period_start = if membership.member == Pubkey::default() {
             membership.member = ctx.accounts.member.key();
@@ -346,7 +354,6 @@ pub mod infx_support {
                 membership.member == ctx.accounts.member.key(),
                 SupportError::Unauthorized
             );
-            let monthly = plan.period_seconds == MONTHLY_PERIOD_SECONDS;
             let earliest = if monthly {
                 next_month(
                     membership.last_charged_at,
@@ -389,12 +396,39 @@ pub mod infx_support {
             treasury_amount,
         )?;
 
+        let mandate_in_step = ctx
+            .accounts
+            .mandate
+            .as_ref()
+            .is_some_and(|mandate| mandate.periods_paid == membership.periods_paid);
         membership.last_charged_at = period_start;
         membership.periods_paid = membership
             .periods_paid
             .checked_add(1)
             .ok_or(SupportError::MathOverflow)?;
         membership.cancelled = false;
+
+        if let Some(mandate) = ctx.accounts.mandate.as_deref_mut() {
+            // SEC-17: a mandate that would have charged this period is
+            // satisfied by the manual payment. A mandate that is exhausted,
+            // already out of step, on changed terms or past its window is
+            // left as it is; it needs fresh consent (SEC-9).
+            let live = monthly
+                && mandate_in_step
+                && mandate.remaining > 0
+                && mandate.price == plan.price
+                && mandate.benefits_hash == plan.benefits_hash
+                && now
+                    <= mandate
+                        .next_charge_at
+                        .checked_add(GRACE_SECONDS)
+                        .ok_or(SupportError::MathOverflow)?;
+            if live {
+                mandate.periods_paid = membership.periods_paid;
+                mandate.next_charge_at =
+                    next_month(mandate.next_charge_at, mandate.anchor_day)?.0;
+            }
+        }
 
         emit!(MembershipCharged {
             creator: ctx.accounts.support_config.creator,
@@ -466,9 +500,13 @@ pub mod infx_support {
         } else {
             0
         };
-        // A new consent cannot silently move an existing mandate to another source.
+        // A new consent cannot silently move a live mandate to another source.
+        // Once nothing remains (revoked or exhausted) the member may consent
+        // again from any of their accounts (SEC-16).
         require!(
-            mandate.source == Pubkey::default() || mandate.source == source.key(),
+            mandate.source == Pubkey::default()
+                || mandate.source == source.key()
+                || mandate.remaining == 0,
             SupportError::InvalidMandate
         );
         let allowance = source
@@ -1134,24 +1172,27 @@ pub struct CreatorOnlyConfig<'info> {
     pub support_config: Account<'info, SupportConfig>,
 }
 
+// Boxed: with the optional mandate this account set no longer fits the SBF
+// stack frame unboxed, and an overflowed frame is silent memory corruption
+// (the build fails on the compiler's stack-offset warning for this reason).
 #[derive(Accounts)]
 pub struct ChargeMembershipPeriod<'info> {
     #[account(mut)]
     pub member: Signer<'info>,
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
-    pub global: Account<'info, GlobalConfig>,
+    pub global: Box<Account<'info, GlobalConfig>>,
     #[account(
         seeds = [CREATOR_SEED, support_config.creator.as_ref()],
         bump = support_config.bump,
         constraint = support_config.creator != member.key() @ SupportError::SelfSupport,
     )]
-    pub support_config: Account<'info, SupportConfig>,
+    pub support_config: Box<Account<'info, SupportConfig>>,
     #[account(
         seeds = [PLAN_SEED, support_config.creator.as_ref(), &plan.index.to_le_bytes()],
         bump = plan.bump,
         constraint = plan.creator == support_config.creator @ SupportError::PlanCreatorMismatch,
     )]
-    pub plan: Account<'info, MembershipPlan>,
+    pub plan: Box<Account<'info, MembershipPlan>>,
     #[account(
         init_if_needed,
         payer = member,
@@ -1159,15 +1200,15 @@ pub struct ChargeMembershipPeriod<'info> {
         seeds = [MEMBERSHIP_SEED, plan.key().as_ref(), member.key().as_ref()],
         bump,
     )]
-    pub membership: Account<'info, Membership>,
+    pub membership: Box<Account<'info, Membership>>,
     #[account(address = global.usdc_mint @ SupportError::WrongMint)]
-    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(
         mut,
         constraint = member_usdc_account.mint == global.usdc_mint @ SupportError::WrongMint,
         constraint = member_usdc_account.owner == member.key() @ SupportError::Unauthorized,
     )]
-    pub member_usdc_account: InterfaceAccount<'info, TokenAccount>,
+    pub member_usdc_account: Box<InterfaceAccount<'info, TokenAccount>>,
     // Raw constraints run in order, so a substituted address reports
     // WrongPaymentAccount before the owner check below.
     #[account(
@@ -1177,11 +1218,16 @@ pub struct ChargeMembershipPeriod<'info> {
         // so a phished SetAuthority stops payments instead of redirecting them.
         constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
     )]
-    pub creator_payment_account: InterfaceAccount<'info, TokenAccount>,
+    pub creator_payment_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
-    pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
+    pub treasury_usdc_account: Box<InterfaceAccount<'info, TokenAccount>>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+    /// The member's renewal mandate for this plan, when one exists (SEC-17).
+    /// Optional so a first payment and clients without renewals need not
+    /// pass it; the seeds bind it to this membership.
+    #[account(mut, seeds = [b"renewal", membership.key().as_ref()], bump = mandate.bump)]
+    pub mandate: Option<Box<Account<'info, RenewalMandate>>>,
 }
 
 #[derive(Accounts)]
