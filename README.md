@@ -26,6 +26,23 @@ LUMI_LOCAL_RENEWAL_SECONDS=5 cargo build-sbf --tools-version v1.51 --sbf-out-dir
 
 Never deploy a `local-clock` artifact to a public cluster. The default build has no accelerated clock. The interval must be 5–86400 seconds. No program keypair, authority key, treasury secret or deployment credentials are included.
 
+## Verified build
+
+Every release tag (`devnet-*`, `mainnet-*`) runs the `Verified build` workflow: a deterministic `solana-verify build` in the pinned `solanafoundation/solana-verifiable-build:2.1.18` container, compared with the bytes on the cluster. The job summary shows two hashes for the same binary: the plain SHA-256 of the `.so` file, which the Lumi application records and checks in the browser, and solana-verify's hash (the file with trailing zero bytes removed), which Solana Explorer and Solscan show. The Lumi Contracts page (`/contracts`) displays both next to the deployed slot, the deploy transaction and the commit.
+
+To reproduce locally with Docker running:
+
+```sh
+cargo install solana-verify --version 0.5.1 --locked
+solana-verify build --base-image solanafoundation/solana-verifiable-build:2.1.18 --library-name infx_support
+solana-verify get-executable-hash target/deploy/infx_support.so
+solana-verify get-program-hash -u https://api.devnet.solana.com GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv
+```
+
+Publishing the verification on chain, so explorers show the program as verified, is a signature by the upgrade authority and is done by a person: `solana-verify verify-from-repo -u <cluster url> --program-id GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv https://github.com/lumi-fans/solana-contracts --commit-hash <tag commit> --library-name infx_support -k <upgrade authority keypair>`.
+
+The binary embeds a `security.txt` section (contact, policy, source) that explorers render; the policy is [SECURITY.md](SECURITY.md).
+
 ## Scope
 
 This is source publication, not an audit or a mainnet launch. There is no custody or refund instruction. Renewals require capped wallet consent, expire after their retry window, and can be stopped by cancelling membership or revoking the token allowance. The program is currently marked `UNLICENSED`; publication does not grant a software license.

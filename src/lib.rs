@@ -38,6 +38,21 @@ fn next_month(timestamp: i64, anchor: u8) -> Result<(i64, u8)> {
 
 declare_id!("GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv");
 
+// Embedded contact and source pointers, rendered by explorers next to the
+// program. Omitted from CPI/no-entrypoint builds so it appears once per binary.
+#[cfg(not(feature = "no-entrypoint"))]
+solana_security_txt::security_txt! {
+    name: "Lumi support program (infx_support)",
+    project_url: "https://lumi-fans.com/contracts",
+    contacts: "email:hello@lumi-fans.com",
+    policy: "https://github.com/lumi-fans/solana-contracts/blob/main/SECURITY.md",
+    preferred_languages: "en",
+    source_code: "https://github.com/lumi-fans/solana-contracts",
+    source_release: env!("CARGO_PKG_VERSION"),
+    auditors: "None",
+    acknowledgements: "Findings from internal review are tracked in docs/security/contract-findings.md"
+}
+
 /// 0.1% of every gift and membership charge. Changing this needs a human.
 pub const FEE_BPS: u64 = 10;
 pub const BPS_DENOMINATOR: u64 = 10_000;
