@@ -1,13 +1,13 @@
 [package]
-name = "infx-support"
+name = "lumi-support"
 version = "0.1.0"
-description = "INFx direct support: gifts and membership charges, 99.9% to the creator and 0.1% to the treasury in one instruction"
+description = "Lumi direct support: gifts and membership charges, 99.9% to the creator and 0.1% to the treasury in one instruction"
 edition = "2021"
 license = "UNLICENSED"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "infx_support"
+name = "lumi_support"
 
 [features]
 default = []

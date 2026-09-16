@@ -67,6 +67,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: monthly-program-${{ github.sha }}
-          path: target/deploy/infx_support.so
+          path: target/deploy/lumi_support.so
           if-no-files-found: error
           retention-days: 7

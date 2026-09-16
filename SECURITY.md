@@ -10,7 +10,7 @@ Include the commit or the deployed program hash you looked at, the instruction a
 
 ## Scope
 
-- The program in this repository (`infx_support`) as deployed on the cluster named on the Lumi Contracts page, which shows the deployed hash and the commit it was built from.
+- The program in this repository (`lumi_support`) as deployed on the cluster named on the Lumi Contracts page, which shows the deployed hash and the commit it was built from.
 - Findings are tracked in priority order in `docs/security/contract-findings.md` with a status and the test that pins each one.
 
 Out of scope: the disposable `local-clock` build, test deployments that were never linked from the Contracts page, and third-party programs the contract calls (the SPL Token program).

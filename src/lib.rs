@@ -1,8 +1,8 @@
-//! infx-support: the Phase 1 product.
+//! lumi-support: the Phase 1 product.
 //!
 //! A fan sends a one-off gift or pays a membership period in USDC. In the same
 //! instruction 99.9% goes to the creator's registered USDC account and 0.1% to the
-//! INFx treasury. The program never holds a balance and has no instruction that
+//! Lumi treasury. The program never holds a balance and has no instruction that
 //! can move funds anywhere except those two accounts.
 //!
 //! Money is the creator's the moment it is paid. There is no escrow, no refund
@@ -52,7 +52,7 @@ declare_id!("CnA1TVJUnVLzh5FgWwNcNcdT6MdiTRKGgkudHihUHVun");
 // program. Omitted from CPI/no-entrypoint builds so it appears once per binary.
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {
-    name: "Lumi support program (infx_support)",
+    name: "Lumi support program (lumi_support)",
     project_url: "https://lumi-fans.com/contracts",
     contacts: "email:hello@lumi-fans.com",
     policy: "https://github.com/lumi-fans/solana-contracts/blob/main/SECURITY.md",
@@ -96,7 +96,7 @@ pub const MEMBERSHIP_SEED: &[u8] = b"membership";
 pub const ADMIN_TRANSFER_SEED: &[u8] = b"admin-transfer";
 
 /// The treasury share rounds down and the creator receives the residue, so
-/// the two always sum exactly to the amount and rounding never favours INFx.
+/// the two always sum exactly to the amount and rounding never favours Lumi.
 pub fn split(amount: u64) -> Result<(u64, u64)> {
     let treasury = amount
         .checked_mul(FEE_BPS)
@@ -109,7 +109,7 @@ pub fn split(amount: u64) -> Result<(u64, u64)> {
 }
 
 #[program]
-pub mod infx_support {
+pub mod lumi_support {
     use super::*;
 
     /// One-time setup. Only the program's upgrade authority can call it, so a
@@ -184,7 +184,7 @@ pub mod infx_support {
         Ok(())
     }
 
-    /// Registers a verified creator. Both the INFx registrar and the creator
+    /// Registers a verified creator. Both the Lumi registrar and the creator
     /// sign: the registrar attests to verification, the creator attests to the
     /// payment account. Neither can do it alone.
     pub fn register_creator(ctx: Context<RegisterCreator>) -> Result<()> {
@@ -259,7 +259,7 @@ pub mod infx_support {
 
     /// A membership plan: a price per period and the hash of the benefits
     /// description shown to members. The hash is a record, not a contract:
-    /// INFx does not enforce it (ADR 0007).
+    /// Lumi does not enforce it (ADR 0007).
     pub fn create_membership_plan(
         ctx: Context<CreateMembershipPlan>,
         price: u64,
@@ -1004,7 +1004,7 @@ pub struct Initialize<'info> {
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
     /// This program, so its ProgramData account can be checked.
     #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ SupportError::Unauthorized)]
-    pub program: Program<'info, crate::program::InfxSupport>,
+    pub program: Program<'info, crate::program::LumiSupport>,
     /// Only the upgrade authority may initialise.
     #[account(constraint = program_data.upgrade_authority_address == Some(admin.key()) @ SupportError::Unauthorized)]
     pub program_data: Account<'info, ProgramData>,

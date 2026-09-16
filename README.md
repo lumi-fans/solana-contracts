@@ -2,7 +2,7 @@
 
 Lumi’s Anchor program for direct USDC gifts, creator memberships and capped recurring payments on Solana. Each payment sends 99.9% to the creator and 0.1% to the treasury, rounding the treasury share down in integer token base units. Network fees and account rent are separate SOL costs.
 
-This repository contains the contract source and Rust tests. The Lumi application, onboarding service, indexer, client and full-stack E2E suite are maintained separately in the private app repository. The program and instruction names retain `infx_support` for compatibility.
+This repository contains the contract source and Rust tests. The Lumi application, onboarding service, indexer, client and full-stack E2E suite are maintained separately in the private app repository. The Rust crate is `lumi-support`; the program module, IDL and build artifact use `lumi_support`. The naming change preserves the program address, instruction names and discriminators, account layouts and PDA seeds, so existing accounts remain compatible.
 
 ## Build and test
 
@@ -14,7 +14,7 @@ cargo fmt --check
 cargo build-sbf --tools-version v1.51
 ```
 
-Use the standard build for calendar-month billing. The app pins this repository as a Git submodule at `programs/infx-support`; initialize recursive submodules after cloning the app.
+Use the standard build for calendar-month billing. The app pins this repository as a Git submodule at `programs/lumi-support`; initialize recursive submodules after cloning the app.
 
 ## Disposable local clock
 
@@ -38,12 +38,12 @@ To reproduce locally with Docker running:
 
 ```sh
 cargo install solana-verify --version 0.5.1 --locked
-solana-verify build --base-image solanafoundation/solana-verifiable-build:2.1.18 --library-name infx_support
-solana-verify get-executable-hash target/deploy/infx_support.so
+solana-verify build --base-image solanafoundation/solana-verifiable-build:2.1.18 --library-name lumi_support
+solana-verify get-executable-hash target/deploy/lumi_support.so
 solana-verify get-program-hash -u https://api.devnet.solana.com GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv
 ```
 
-Publishing the verification on chain, so explorers show the program as verified, is a signature by the upgrade authority and is done by a person: `solana-verify verify-from-repo -u <cluster url> --program-id GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv https://github.com/lumi-fans/solana-contracts --commit-hash <tag commit> --library-name infx_support -k <upgrade authority keypair>`.
+Publishing the verification on chain, so explorers show the program as verified, is a signature by the upgrade authority and is done by a person: `solana-verify verify-from-repo -u <cluster url> --program-id GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv https://github.com/lumi-fans/solana-contracts --commit-hash <tag commit> --library-name lumi_support -k <upgrade authority keypair>`.
 
 The binary embeds a `security.txt` section (contact, policy, source) that explorers render; the policy is [SECURITY.md](SECURITY.md).
 
@@ -55,4 +55,4 @@ This is source publication, not an audit or a mainnet launch. There is no custod
 
 This repository is private. `Contract checks` runs on pushes, pull requests and manual dispatch. It checks formatting, Clippy and Rust tests for both normal calendar-month and accelerated local-test builds, then separately compiles the normal Solana SBF program. It uploads only the normal `.so`, never a keypair. There is no deployment workflow.
 
-The root `action.yml` allows the private app repository to obtain contract source through GitHub's organisation-scoped private-action sharing. GitHub supplies a temporary read-only download token; no personal token or deploy key is stored in the app. The app must pin the action to the exact full SHA of its `programs/infx-support` gitlink. Mismatched revisions fail before compilation. When updating that gitlink, update `.github/actions/contracts/action.yml` in the app in the same commit.
+The root `action.yml` allows the private app repository to obtain contract source through GitHub's organisation-scoped private-action sharing. GitHub supplies a temporary read-only download token; no personal token or deploy key is stored in the app. The app must pin the action to the exact full SHA of its `programs/lumi-support` gitlink. Mismatched revisions fail before compilation. When updating that gitlink, update `.github/actions/contracts/action.yml` in the app in the same commit.
