@@ -20,7 +20,8 @@ mod calendar;
 #[cfg(not(feature = "local-clock"))]
 use calendar::next_month;
 
-// Compiled only for the disposable local validator; never a runtime production flag.
+// Compiled only for the disposable local validator; never a runtime production
+// flag. The build also declares a different program id (see `declare_id!`).
 #[cfg(feature = "local-clock")]
 fn next_month(timestamp: i64, anchor: u8) -> Result<(i64, u8)> {
     let seconds: i64 = env!("LUMI_LOCAL_RENEWAL_SECONDS")
@@ -36,7 +37,16 @@ fn next_month(timestamp: i64, anchor: u8) -> Result<(i64, u8)> {
     ))
 }
 
+#[cfg(not(feature = "local-clock"))]
 declare_id!("GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv");
+
+// SEC-11: the accelerated build declares its own id. Anchor refuses to run a
+// program at any address other than its declared id, so this artifact cannot
+// execute at the public program address even if someone uploads it there.
+// The keypair for this id is not needed: a local validator loads the
+// program at genesis from the address alone.
+#[cfg(feature = "local-clock")]
+declare_id!("CnA1TVJUnVLzh5FgWwNcNcdT6MdiTRKGgkudHihUHVun");
 
 // Embedded contact and source pointers, rendered by explorers next to the
 // program. Omitted from CPI/no-entrypoint builds so it appears once per binary.
@@ -62,11 +72,19 @@ pub const MIN_GIFT: u64 = 1_000_000;
 pub const MIN_PLAN_PRICE: u64 = 1_000_000;
 pub const MAX_PLAN_PRICE: u64 = 500_000_000;
 
-/// DECISION(Q7): a membership period is measured in seconds from the previous
-/// charge. Bounded so a plan cannot be created with a period that lets a
-/// creator charge every block or never.
+/// DECISION(Q7): a fixed-length membership period is measured in seconds from
+/// the start of the previous period. A plan of exactly `MONTHLY_PERIOD_SECONDS`
+/// bills by calendar month instead: the same day each month, clamped to the
+/// end of shorter months. Bounded so a plan cannot be created with a period
+/// that lets a creator charge every block or never.
 pub const MIN_PERIOD_SECONDS: i64 = 24 * 60 * 60;
 pub const MAX_PERIOD_SECONDS: i64 = 366 * 24 * 60 * 60;
+pub const MONTHLY_PERIOD_SECONDS: i64 = 30 * 86400;
+
+/// How long after a due date a charge still counts for that period. A manual
+/// payment inside the window starts its month at the due date; a later one
+/// starts a fresh month from the payment. Renewal mandates expire past it.
+pub const GRACE_SECONDS: i64 = 3 * 86400;
 
 /// Cooling period before a creator's payment-account rotation takes effect.
 pub const ROTATION_COOLING_SECONDS: i64 = 48 * 60 * 60;
@@ -75,6 +93,7 @@ pub const GLOBAL_SEED: &[u8] = b"global";
 pub const CREATOR_SEED: &[u8] = b"creator";
 pub const PLAN_SEED: &[u8] = b"plan";
 pub const MEMBERSHIP_SEED: &[u8] = b"membership";
+pub const ADMIN_TRANSFER_SEED: &[u8] = b"admin-transfer";
 
 /// The treasury share rounds down and the creator receives the residue, so
 /// the two always sum exactly to the amount and rounding never favours INFx.
@@ -93,8 +112,11 @@ pub fn split(amount: u64) -> Result<(u64, u64)> {
 pub mod infx_support {
     use super::*;
 
-    /// One-time setup. The treasury account is fixed here and can only be
-    /// changed by the admin, which on mainnet is the Squads multisig.
+    /// One-time setup. Only the program's upgrade authority can call it, so a
+    /// fresh deployment cannot be claimed by whoever reaches it first. The
+    /// treasury and admin can later be changed by the admin (`set_treasury`,
+    /// `propose_admin` then `accept_admin`), which on mainnet is the Squads
+    /// multisig.
     pub fn initialize(ctx: Context<Initialize>, registrar: Pubkey) -> Result<()> {
         let global = &mut ctx.accounts.global;
         global.admin = ctx.accounts.admin.key();
@@ -113,7 +135,52 @@ pub mod infx_support {
     }
 
     pub fn set_registrar(ctx: Context<AdminOnly>, registrar: Pubkey) -> Result<()> {
+        let previous = ctx.accounts.global.registrar;
         ctx.accounts.global.registrar = registrar;
+        emit!(RegistrarChanged {
+            previous_registrar: previous,
+            registrar,
+        });
+        Ok(())
+    }
+
+    /// Points the fee share at a different USDC account, for example after the
+    /// current one is frozen or closed. Every later gift and charge pays it.
+    pub fn set_treasury(ctx: Context<SetTreasury>) -> Result<()> {
+        let global = &mut ctx.accounts.global;
+        let previous = global.treasury_usdc_account;
+        global.treasury_usdc_account = ctx.accounts.treasury_usdc_account.key();
+        emit!(TreasuryChanged {
+            previous_treasury_usdc_account: previous,
+            treasury_usdc_account: global.treasury_usdc_account,
+        });
+        Ok(())
+    }
+
+    /// First half of an admin hand-over. Nothing changes until the proposed
+    /// key signs `accept_admin`, so a typo cannot strand the protocol.
+    pub fn propose_admin(ctx: Context<ProposeAdmin>, new_admin: Pubkey) -> Result<()> {
+        require!(new_admin != Pubkey::default(), SupportError::Unauthorized);
+        let transfer = &mut ctx.accounts.admin_transfer;
+        transfer.pending_admin = new_admin;
+        transfer.bump = ctx.bumps.admin_transfer;
+        Ok(())
+    }
+
+    /// The current admin withdraws a proposal.
+    pub fn cancel_admin_transfer(_ctx: Context<CancelAdminTransfer>) -> Result<()> {
+        Ok(())
+    }
+
+    /// Second half: the proposed key takes over and the proposal is closed.
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        let global = &mut ctx.accounts.global;
+        let previous = global.admin;
+        global.admin = ctx.accounts.new_admin.key();
+        emit!(AdminChanged {
+            previous_admin: previous,
+            admin: global.admin,
+        });
         Ok(())
     }
 
@@ -141,11 +208,13 @@ pub mod infx_support {
     }
 
     /// The registrar or the admin can pause a creator: no new gifts or charges.
+    /// Only the admin can unpause (SEC-8): the registrar is a hot key, and a
+    /// leaked one must not be able to reverse an enforcement pause.
     pub fn set_creator_paused(ctx: Context<SetCreatorPaused>, paused: bool) -> Result<()> {
         let signer = ctx.accounts.authority.key();
         let global = &ctx.accounts.global;
         require!(
-            signer == global.admin || signer == global.registrar,
+            signer == global.admin || (signer == global.registrar && paused),
             SupportError::Unauthorized
         );
         ctx.accounts.support_config.paused = paused;
@@ -236,6 +305,10 @@ pub mod infx_support {
     /// for; nothing is refunded because nothing is held.
     pub fn set_plan_active(ctx: Context<CreatorOnlyPlan>, active: bool) -> Result<()> {
         ctx.accounts.plan.active = active;
+        emit!(PlanActiveChanged {
+            plan: ctx.accounts.plan.key(),
+            active,
+        });
         Ok(())
     }
 
@@ -257,8 +330,20 @@ pub mod infx_support {
     /// time. A charge cannot exceed the plan price, cannot happen inside the
     /// period, and cannot happen on a closed plan or a paused creator.
     ///
+    /// `last_charged_at` is the start of the paid period, not the wall-clock
+    /// time of the payment. A monthly payment inside `GRACE_SECONDS` of its
+    /// due date keeps the anniversary; a later one re-anchors the membership
+    /// to the payment date, so a member never buys less than a month (SEC-3).
+    ///
     /// Paying again after cancelling is a deliberate act by the member and
     /// re-activates the membership.
+    ///
+    /// If the member's renewal mandate for this plan is passed and is live for
+    /// the period being paid, the manual payment counts as that period's
+    /// renewal: the mandate's counter stays level with the membership and its
+    /// schedule moves on a month, so the keeper neither charges the same
+    /// period again nor finds a mandate it can never use (SEC-17). The
+    /// mandate's remaining automatic payments are not consumed.
     pub fn charge_membership_period(ctx: Context<ChargeMembershipPeriod>) -> Result<()> {
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
         require!(
@@ -270,19 +355,21 @@ pub mod infx_support {
         let now = Clock::get()?.unix_timestamp;
         let plan = &ctx.accounts.plan;
         let membership = &mut ctx.accounts.membership;
+        let monthly = plan.period_seconds == MONTHLY_PERIOD_SECONDS;
 
-        if membership.member == Pubkey::default() {
+        let period_start = if membership.member == Pubkey::default() {
             membership.member = ctx.accounts.member.key();
             membership.plan = plan.key();
             membership.joined_at = now;
             membership.benefits_hash_at_join = plan.benefits_hash;
             membership.bump = ctx.bumps.membership;
+            now
         } else {
             require!(
                 membership.member == ctx.accounts.member.key(),
                 SupportError::Unauthorized
             );
-            let earliest = if plan.period_seconds == 30 * 86400 {
+            let earliest = if monthly {
                 next_month(
                     membership.last_charged_at,
                     next_month(membership.joined_at, 0)?.1,
@@ -295,7 +382,21 @@ pub mod infx_support {
                     .ok_or(SupportError::MathOverflow)?
             };
             require!(now >= earliest, SupportError::PeriodNotElapsed);
-        }
+            let in_grace = now
+                <= earliest
+                    .checked_add(GRACE_SECONDS)
+                    .ok_or(SupportError::MathOverflow)?;
+            if monthly && in_grace {
+                earliest
+            } else {
+                if monthly {
+                    // Lapsed: the paid month runs from today and the
+                    // anniversary moves with it.
+                    membership.joined_at = now;
+                }
+                now
+            }
+        };
 
         let amount = plan.price;
         let (creator_amount, treasury_amount) = split(amount)?;
@@ -310,12 +411,38 @@ pub mod infx_support {
             treasury_amount,
         )?;
 
-        membership.last_charged_at = now;
+        let mandate_in_step = ctx
+            .accounts
+            .mandate
+            .as_ref()
+            .is_some_and(|mandate| mandate.periods_paid == membership.periods_paid);
+        membership.last_charged_at = period_start;
         membership.periods_paid = membership
             .periods_paid
             .checked_add(1)
             .ok_or(SupportError::MathOverflow)?;
         membership.cancelled = false;
+
+        if let Some(mandate) = ctx.accounts.mandate.as_deref_mut() {
+            // SEC-17: a mandate that would have charged this period is
+            // satisfied by the manual payment. A mandate that is exhausted,
+            // already out of step, on changed terms or past its window is
+            // left as it is; it needs fresh consent (SEC-9).
+            let live = monthly
+                && mandate_in_step
+                && mandate.remaining > 0
+                && mandate.price == plan.price
+                && mandate.benefits_hash == plan.benefits_hash
+                && now
+                    <= mandate
+                        .next_charge_at
+                        .checked_add(GRACE_SECONDS)
+                        .ok_or(SupportError::MathOverflow)?;
+            if live {
+                mandate.periods_paid = membership.periods_paid;
+                mandate.next_charge_at = next_month(mandate.next_charge_at, mandate.anchor_day)?.0;
+            }
+        }
 
         emit!(MembershipCharged {
             creator: ctx.accounts.support_config.creator,
@@ -351,7 +478,7 @@ pub mod infx_support {
             SupportError::InvalidMandate
         );
         require!(
-            ctx.accounts.plan.period_seconds == 30 * 86400,
+            ctx.accounts.plan.period_seconds == MONTHLY_PERIOD_SECONDS,
             SupportError::InvalidMandate
         );
         let membership = &ctx.accounts.membership;
@@ -387,9 +514,13 @@ pub mod infx_support {
         } else {
             0
         };
-        // A new consent cannot silently move an existing mandate to another source.
+        // A new consent cannot silently move a live mandate to another source.
+        // Once nothing remains (revoked or exhausted) the member may consent
+        // again from any of their accounts (SEC-16).
         require!(
-            mandate.source == Pubkey::default() || mandate.source == source.key(),
+            mandate.source == Pubkey::default()
+                || mandate.source == source.key()
+                || mandate.remaining == 0,
             SupportError::InvalidMandate
         );
         let allowance = source
@@ -423,6 +554,58 @@ pub mod infx_support {
         Ok(())
     }
 
+    /// Withdraws the renewal consent for one plan and keeps the membership
+    /// (SEC-7). The mandate is zeroed, which alone guarantees no further
+    /// automatic charge, and the shared token allowance is reduced by this
+    /// mandate's remaining share so the wallet shows only what other plans
+    /// may still use. If that leaves nothing, the delegate is cleared.
+    pub fn revoke_renewal(ctx: Context<RevokeRenewal>) -> Result<()> {
+        let mandate = &mut ctx.accounts.mandate;
+        let share = mandate
+            .price
+            .checked_mul(u64::from(mandate.remaining))
+            .ok_or(SupportError::MathOverflow)?;
+        mandate.remaining = 0;
+        let source = &ctx.accounts.member_usdc_account;
+        let ours = matches!(
+            source.delegate,
+            anchor_lang::solana_program::program_option::COption::Some(delegate)
+                if delegate == ctx.accounts.delegate.key()
+        );
+        if ours {
+            let allowance = source.delegated_amount.saturating_sub(share);
+            if allowance == 0 {
+                token_interface::revoke(CpiContext::new(
+                    ctx.accounts.token_program.to_account_info(),
+                    token_interface::Revoke {
+                        source: source.to_account_info(),
+                        authority: ctx.accounts.member.to_account_info(),
+                    },
+                ))?;
+            } else {
+                token_interface::approve_checked(
+                    CpiContext::new(
+                        ctx.accounts.token_program.to_account_info(),
+                        ApproveChecked {
+                            to: source.to_account_info(),
+                            mint: ctx.accounts.usdc_mint.to_account_info(),
+                            delegate: ctx.accounts.delegate.to_account_info(),
+                            authority: ctx.accounts.member.to_account_info(),
+                        },
+                    ),
+                    allowance,
+                    ctx.accounts.usdc_mint.decimals,
+                )?;
+            }
+        }
+        emit!(RenewalRevoked {
+            plan: mandate.plan,
+            member: mandate.member,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
     /// Permissionless submission: caller pays SOL but can only execute the exact
     /// signed mandate. Chain time and account locks prevent early/duplicate charges.
     pub fn charge_renewal(ctx: Context<ChargeRenewal>) -> Result<()> {
@@ -449,11 +632,11 @@ pub mod infx_support {
             now >= mandate.next_charge_at,
             SupportError::PeriodNotElapsed
         );
-        // Missed renewals expire after a 72-hour retry window. No catch-up debt.
+        // Missed renewals expire after the grace window. No catch-up debt.
         require!(
             now <= mandate
                 .next_charge_at
-                .checked_add(3 * 86400)
+                .checked_add(GRACE_SECONDS)
                 .ok_or(SupportError::MathOverflow)?,
             SupportError::MandateExpired
         );
@@ -484,8 +667,10 @@ pub mod infx_support {
             )?;
         }
         mandate.remaining -= 1;
+        // SEC-10: the paid period starts at the scheduled time, however late
+        // inside the window the keeper landed, so membership and mandate agree.
+        membership.last_charged_at = mandate.next_charge_at;
         mandate.next_charge_at = next_month(mandate.next_charge_at, mandate.anchor_day)?.0;
-        membership.last_charged_at = now;
         membership.periods_paid = membership
             .periods_paid
             .checked_add(1)
@@ -522,6 +707,12 @@ pub mod infx_support {
         ctx: Context<RequestPaymentAccountRotation>,
     ) -> Result<()> {
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
+        // SEC-6: a paused creator (the remedy for a suspected key compromise)
+        // cannot move where they are paid until unpaused.
+        require!(
+            !ctx.accounts.support_config.paused,
+            SupportError::CreatorPaused
+        );
         let now = Clock::get()?.unix_timestamp;
         let config = &mut ctx.accounts.support_config;
         config.pending_payment_account = ctx.accounts.new_payment_account.key();
@@ -542,13 +733,21 @@ pub mod infx_support {
         let config = &mut ctx.accounts.support_config;
         config.pending_payment_account = Pubkey::default();
         config.rotation_effective_at = 0;
+        emit!(PaymentAccountRotationCancelled {
+            creator: config.creator,
+        });
         Ok(())
     }
 
     /// Anyone may apply a rotation once the cooling period has passed; only
-    /// the creator's earlier signature decided what it is.
+    /// the creator's earlier signature decided what it is. Not while the
+    /// creator or the protocol is paused.
     pub fn apply_payment_account_rotation(ctx: Context<ApplyPaymentAccountRotation>) -> Result<()> {
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
+        require!(
+            !ctx.accounts.support_config.paused,
+            SupportError::CreatorPaused
+        );
         let now = Clock::get()?.unix_timestamp;
         let config = &mut ctx.accounts.support_config;
         require!(
@@ -633,6 +832,15 @@ pub struct GlobalConfig {
     pub bump: u8,
 }
 
+/// A pending admin hand-over. Kept in its own PDA so the deployed
+/// `GlobalConfig` layout is unchanged.
+#[account]
+#[derive(InitSpace)]
+pub struct AdminTransfer {
+    pub pending_admin: Pubkey,
+    pub bump: u8,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct SupportConfig {
@@ -691,7 +899,11 @@ pub struct AuthorizeRenewal<'info> {
     pub member: Signer<'info>,
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Box<Account<'info, GlobalConfig>>,
-    #[account(seeds = [CREATOR_SEED, support_config.creator.as_ref()], bump = support_config.bump)]
+    #[account(
+        seeds = [CREATOR_SEED, support_config.creator.as_ref()],
+        bump = support_config.bump,
+        constraint = support_config.creator != member.key() @ SupportError::SelfSupport,
+    )]
     pub support_config: Box<Account<'info, SupportConfig>>,
     #[account(seeds = [PLAN_SEED, plan.creator.as_ref(), &plan.index.to_le_bytes()], bump = plan.bump, constraint = plan.creator == support_config.creator @ SupportError::PlanCreatorMismatch)]
     pub plan: Box<Account<'info, MembershipPlan>>,
@@ -711,10 +923,33 @@ pub struct AuthorizeRenewal<'info> {
 }
 
 #[derive(Accounts)]
+pub struct RevokeRenewal<'info> {
+    pub member: Signer<'info>,
+    #[account(seeds = [PLAN_SEED, plan.creator.as_ref(), &plan.index.to_le_bytes()], bump = plan.bump)]
+    pub plan: Box<Account<'info, MembershipPlan>>,
+    #[account(seeds = [MEMBERSHIP_SEED, plan.key().as_ref(), member.key().as_ref()], bump = membership.bump, has_one = member, has_one = plan)]
+    pub membership: Box<Account<'info, Membership>>,
+    #[account(mut, seeds = [b"renewal", membership.key().as_ref()], bump = mandate.bump, has_one = plan, has_one = member @ SupportError::Unauthorized)]
+    pub mandate: Box<Account<'info, RenewalMandate>>,
+    #[account(mut, address = mandate.source, constraint = member_usdc_account.owner == member.key() @ SupportError::Unauthorized)]
+    pub member_usdc_account: InterfaceAccount<'info, TokenAccount>,
+    /// CHECK: PDA authority; the seeds fix the only delegate this program uses.
+    #[account(seeds = [b"renewal-delegate", member_usdc_account.key().as_ref()], bump)]
+    pub delegate: UncheckedAccount<'info>,
+    #[account(address = member_usdc_account.mint @ SupportError::WrongMint)]
+    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
 pub struct ChargeRenewal<'info> {
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Box<Account<'info, GlobalConfig>>,
-    #[account(seeds = [CREATOR_SEED, support_config.creator.as_ref()], bump = support_config.bump)]
+    #[account(
+        seeds = [CREATOR_SEED, support_config.creator.as_ref()],
+        bump = support_config.bump,
+        constraint = support_config.creator != membership.member @ SupportError::SelfSupport,
+    )]
     pub support_config: Box<Account<'info, SupportConfig>>,
     #[account(seeds = [PLAN_SEED, plan.creator.as_ref(), &plan.index.to_le_bytes()], bump = plan.bump, constraint = plan.creator == support_config.creator @ SupportError::PlanCreatorMismatch)]
     pub plan: Box<Account<'info, MembershipPlan>>,
@@ -729,7 +964,15 @@ pub struct ChargeRenewal<'info> {
     pub delegate: UncheckedAccount<'info>,
     #[account(address = global.usdc_mint @ SupportError::WrongMint)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
-    #[account(mut, address = support_config.payment_account @ SupportError::WrongPaymentAccount)]
+    // Raw constraints run in order, so a substituted address reports
+    // WrongPaymentAccount before the owner check below.
+    #[account(
+        mut,
+        constraint = creator_payment_account.key() == support_config.payment_account @ SupportError::WrongPaymentAccount,
+        // SEC-4: an account whose owner changed after registration is refused,
+        // so a phished SetAuthority stops payments instead of redirecting them.
+        constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
+    )]
     pub creator_payment_account: InterfaceAccount<'info, TokenAccount>,
     #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
@@ -752,10 +995,72 @@ pub struct Initialize<'info> {
         bump,
     )]
     pub global: Account<'info, GlobalConfig>,
+    /// SEC-15: USDC is a classic SPL Token mint. A Token-2022 mint could carry
+    /// a transfer-fee extension that makes emitted amounts overstate what
+    /// arrives, so the program refuses any other token program here.
+    #[account(constraint = usdc_mint.to_account_info().owner == &anchor_spl::token::ID @ SupportError::UnsupportedTokenProgram)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
     #[account(constraint = treasury_usdc_account.mint == usdc_mint.key() @ SupportError::WrongMint)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
+    /// This program, so its ProgramData account can be checked.
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ SupportError::Unauthorized)]
+    pub program: Program<'info, crate::program::InfxSupport>,
+    /// Only the upgrade authority may initialise.
+    #[account(constraint = program_data.upgrade_authority_address == Some(admin.key()) @ SupportError::Unauthorized)]
+    pub program_data: Account<'info, ProgramData>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetTreasury<'info> {
+    pub admin: Signer<'info>,
+    #[account(mut, seeds = [GLOBAL_SEED], bump = global.bump, has_one = admin @ SupportError::Unauthorized)]
+    pub global: Account<'info, GlobalConfig>,
+    #[account(constraint = treasury_usdc_account.mint == global.usdc_mint @ SupportError::WrongMint)]
+    pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
+}
+
+#[derive(Accounts)]
+pub struct ProposeAdmin<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [GLOBAL_SEED], bump = global.bump, has_one = admin @ SupportError::Unauthorized)]
+    pub global: Account<'info, GlobalConfig>,
+    #[account(
+        init_if_needed,
+        payer = admin,
+        space = 8 + AdminTransfer::INIT_SPACE,
+        seeds = [ADMIN_TRANSFER_SEED],
+        bump,
+    )]
+    pub admin_transfer: Account<'info, AdminTransfer>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CancelAdminTransfer<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [GLOBAL_SEED], bump = global.bump, has_one = admin @ SupportError::Unauthorized)]
+    pub global: Account<'info, GlobalConfig>,
+    #[account(mut, seeds = [ADMIN_TRANSFER_SEED], bump = admin_transfer.bump, close = admin)]
+    pub admin_transfer: Account<'info, AdminTransfer>,
+}
+
+#[derive(Accounts)]
+pub struct AcceptAdmin<'info> {
+    #[account(mut)]
+    pub new_admin: Signer<'info>,
+    #[account(mut, seeds = [GLOBAL_SEED], bump = global.bump)]
+    pub global: Account<'info, GlobalConfig>,
+    #[account(
+        mut,
+        seeds = [ADMIN_TRANSFER_SEED],
+        bump = admin_transfer.bump,
+        constraint = admin_transfer.pending_admin == new_admin.key() @ SupportError::Unauthorized,
+        close = new_admin,
+    )]
+    pub admin_transfer: Account<'info, AdminTransfer>,
 }
 
 #[derive(Accounts)]
@@ -802,7 +1107,13 @@ pub struct Gift<'info> {
     pub fan: Signer<'info>,
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Account<'info, GlobalConfig>,
-    #[account(seeds = [CREATOR_SEED, support_config.creator.as_ref()], bump = support_config.bump)]
+    // SEC-5: a creator paying themselves would emit full income while the
+    // token program treats the transfer as a no-op.
+    #[account(
+        seeds = [CREATOR_SEED, support_config.creator.as_ref()],
+        bump = support_config.bump,
+        constraint = support_config.creator != fan.key() @ SupportError::SelfSupport,
+    )]
     pub support_config: Account<'info, SupportConfig>,
     #[account(address = global.usdc_mint @ SupportError::WrongMint)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
@@ -812,7 +1123,15 @@ pub struct Gift<'info> {
         constraint = fan_usdc_account.owner == fan.key() @ SupportError::Unauthorized,
     )]
     pub fan_usdc_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut, address = support_config.payment_account @ SupportError::WrongPaymentAccount)]
+    // Raw constraints run in order, so a substituted address reports
+    // WrongPaymentAccount before the owner check below.
+    #[account(
+        mut,
+        constraint = creator_payment_account.key() == support_config.payment_account @ SupportError::WrongPaymentAccount,
+        // SEC-4: an account whose owner changed after registration is refused,
+        // so a phished SetAuthority stops payments instead of redirecting them.
+        constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
+    )]
     pub creator_payment_account: InterfaceAccount<'info, TokenAccount>,
     #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
@@ -867,20 +1186,27 @@ pub struct CreatorOnlyConfig<'info> {
     pub support_config: Account<'info, SupportConfig>,
 }
 
+// Boxed: with the optional mandate this account set no longer fits the SBF
+// stack frame unboxed, and an overflowed frame is silent memory corruption
+// (the build fails on the compiler's stack-offset warning for this reason).
 #[derive(Accounts)]
 pub struct ChargeMembershipPeriod<'info> {
     #[account(mut)]
     pub member: Signer<'info>,
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
-    pub global: Account<'info, GlobalConfig>,
-    #[account(seeds = [CREATOR_SEED, support_config.creator.as_ref()], bump = support_config.bump)]
-    pub support_config: Account<'info, SupportConfig>,
+    pub global: Box<Account<'info, GlobalConfig>>,
+    #[account(
+        seeds = [CREATOR_SEED, support_config.creator.as_ref()],
+        bump = support_config.bump,
+        constraint = support_config.creator != member.key() @ SupportError::SelfSupport,
+    )]
+    pub support_config: Box<Account<'info, SupportConfig>>,
     #[account(
         seeds = [PLAN_SEED, support_config.creator.as_ref(), &plan.index.to_le_bytes()],
         bump = plan.bump,
         constraint = plan.creator == support_config.creator @ SupportError::PlanCreatorMismatch,
     )]
-    pub plan: Account<'info, MembershipPlan>,
+    pub plan: Box<Account<'info, MembershipPlan>>,
     #[account(
         init_if_needed,
         payer = member,
@@ -888,21 +1214,34 @@ pub struct ChargeMembershipPeriod<'info> {
         seeds = [MEMBERSHIP_SEED, plan.key().as_ref(), member.key().as_ref()],
         bump,
     )]
-    pub membership: Account<'info, Membership>,
+    pub membership: Box<Account<'info, Membership>>,
     #[account(address = global.usdc_mint @ SupportError::WrongMint)]
-    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(
         mut,
         constraint = member_usdc_account.mint == global.usdc_mint @ SupportError::WrongMint,
         constraint = member_usdc_account.owner == member.key() @ SupportError::Unauthorized,
     )]
-    pub member_usdc_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut, address = support_config.payment_account @ SupportError::WrongPaymentAccount)]
-    pub creator_payment_account: InterfaceAccount<'info, TokenAccount>,
+    pub member_usdc_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    // Raw constraints run in order, so a substituted address reports
+    // WrongPaymentAccount before the owner check below.
+    #[account(
+        mut,
+        constraint = creator_payment_account.key() == support_config.payment_account @ SupportError::WrongPaymentAccount,
+        // SEC-4: an account whose owner changed after registration is refused,
+        // so a phished SetAuthority stops payments instead of redirecting them.
+        constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
+    )]
+    pub creator_payment_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
-    pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
+    pub treasury_usdc_account: Box<InterfaceAccount<'info, TokenAccount>>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+    /// The member's renewal mandate for this plan, when one exists (SEC-17).
+    /// Optional so a first payment and clients without renewals need not
+    /// pass it; the seeds bind it to this membership.
+    #[account(mut, seeds = [b"renewal", membership.key().as_ref()], bump = mandate.bump)]
+    pub mandate: Option<Box<Account<'info, RenewalMandate>>>,
 }
 
 #[derive(Accounts)]
@@ -970,6 +1309,18 @@ pub struct ProtocolPauseChanged {
 }
 
 #[event]
+pub struct TreasuryChanged {
+    pub previous_treasury_usdc_account: Pubkey,
+    pub treasury_usdc_account: Pubkey,
+}
+
+#[event]
+pub struct AdminChanged {
+    pub previous_admin: Pubkey,
+    pub admin: Pubkey,
+}
+
+#[event]
 pub struct SupportReceived {
     pub creator: Pubkey,
     pub fan: Pubkey,
@@ -990,6 +1341,23 @@ pub struct PlanCreated {
 }
 
 #[event]
+pub struct PlanActiveChanged {
+    pub plan: Pubkey,
+    pub active: bool,
+}
+
+#[event]
+pub struct RegistrarChanged {
+    pub previous_registrar: Pubkey,
+    pub registrar: Pubkey,
+}
+
+#[event]
+pub struct PaymentAccountRotationCancelled {
+    pub creator: Pubkey,
+}
+
+#[event]
 pub struct PlanBenefitsUpdated {
     pub plan: Pubkey,
     pub benefits_hash: [u8; 32],
@@ -1004,6 +1372,13 @@ pub struct MembershipCharged {
     pub creator_amount: u64,
     pub treasury_amount: u64,
     pub period_index: u32,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct RenewalRevoked {
+    pub plan: Pubkey,
+    pub member: Pubkey,
     pub timestamp: i64,
 }
 
@@ -1072,6 +1447,10 @@ pub enum SupportError {
     MandateExpired,
     #[msg("This USDC account already grants permission to another application; revoke it in your wallet first")]
     OtherDelegate,
+    #[msg("A creator cannot send support to their own page")]
+    SelfSupport,
+    #[msg("The mint must belong to the classic SPL Token program")]
+    UnsupportedTokenProgram,
 }
 
 #[cfg(test)]
