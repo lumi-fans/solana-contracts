@@ -60,6 +60,7 @@ pub const GLOBAL_SEED: &[u8] = b"global";
 pub const CREATOR_SEED: &[u8] = b"creator";
 pub const PLAN_SEED: &[u8] = b"plan";
 pub const MEMBERSHIP_SEED: &[u8] = b"membership";
+pub const ADMIN_TRANSFER_SEED: &[u8] = b"admin-transfer";
 
 /// The treasury share rounds down and the creator receives the residue, so
 /// the two always sum exactly to the amount and rounding never favours INFx.
@@ -78,8 +79,11 @@ pub fn split(amount: u64) -> Result<(u64, u64)> {
 pub mod infx_support {
     use super::*;
 
-    /// One-time setup. The treasury account is fixed here and can only be
-    /// changed by the admin, which on mainnet is the Squads multisig.
+    /// One-time setup. Only the program's upgrade authority can call it, so a
+    /// fresh deployment cannot be claimed by whoever reaches it first. The
+    /// treasury and admin can later be changed by the admin (`set_treasury`,
+    /// `propose_admin` then `accept_admin`), which on mainnet is the Squads
+    /// multisig.
     pub fn initialize(ctx: Context<Initialize>, registrar: Pubkey) -> Result<()> {
         let global = &mut ctx.accounts.global;
         global.admin = ctx.accounts.admin.key();
@@ -99,6 +103,46 @@ pub mod infx_support {
 
     pub fn set_registrar(ctx: Context<AdminOnly>, registrar: Pubkey) -> Result<()> {
         ctx.accounts.global.registrar = registrar;
+        Ok(())
+    }
+
+    /// Points the fee share at a different USDC account, for example after the
+    /// current one is frozen or closed. Every later gift and charge pays it.
+    pub fn set_treasury(ctx: Context<SetTreasury>) -> Result<()> {
+        let global = &mut ctx.accounts.global;
+        let previous = global.treasury_usdc_account;
+        global.treasury_usdc_account = ctx.accounts.treasury_usdc_account.key();
+        emit!(TreasuryChanged {
+            previous_treasury_usdc_account: previous,
+            treasury_usdc_account: global.treasury_usdc_account,
+        });
+        Ok(())
+    }
+
+    /// First half of an admin hand-over. Nothing changes until the proposed
+    /// key signs `accept_admin`, so a typo cannot strand the protocol.
+    pub fn propose_admin(ctx: Context<ProposeAdmin>, new_admin: Pubkey) -> Result<()> {
+        require!(new_admin != Pubkey::default(), SupportError::Unauthorized);
+        let transfer = &mut ctx.accounts.admin_transfer;
+        transfer.pending_admin = new_admin;
+        transfer.bump = ctx.bumps.admin_transfer;
+        Ok(())
+    }
+
+    /// The current admin withdraws a proposal.
+    pub fn cancel_admin_transfer(_ctx: Context<CancelAdminTransfer>) -> Result<()> {
+        Ok(())
+    }
+
+    /// Second half: the proposed key takes over and the proposal is closed.
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        let global = &mut ctx.accounts.global;
+        let previous = global.admin;
+        global.admin = ctx.accounts.new_admin.key();
+        emit!(AdminChanged {
+            previous_admin: previous,
+            admin: global.admin,
+        });
         Ok(())
     }
 
@@ -618,6 +662,15 @@ pub struct GlobalConfig {
     pub bump: u8,
 }
 
+/// A pending admin hand-over. Kept in its own PDA so the deployed
+/// `GlobalConfig` layout is unchanged.
+#[account]
+#[derive(InitSpace)]
+pub struct AdminTransfer {
+    pub pending_admin: Pubkey,
+    pub bump: u8,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct SupportConfig {
@@ -740,7 +793,65 @@ pub struct Initialize<'info> {
     pub usdc_mint: InterfaceAccount<'info, Mint>,
     #[account(constraint = treasury_usdc_account.mint == usdc_mint.key() @ SupportError::WrongMint)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
+    /// This program, so its ProgramData account can be checked.
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ SupportError::Unauthorized)]
+    pub program: Program<'info, crate::program::InfxSupport>,
+    /// Only the upgrade authority may initialise.
+    #[account(constraint = program_data.upgrade_authority_address == Some(admin.key()) @ SupportError::Unauthorized)]
+    pub program_data: Account<'info, ProgramData>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetTreasury<'info> {
+    pub admin: Signer<'info>,
+    #[account(mut, seeds = [GLOBAL_SEED], bump = global.bump, has_one = admin @ SupportError::Unauthorized)]
+    pub global: Account<'info, GlobalConfig>,
+    #[account(constraint = treasury_usdc_account.mint == global.usdc_mint @ SupportError::WrongMint)]
+    pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
+}
+
+#[derive(Accounts)]
+pub struct ProposeAdmin<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [GLOBAL_SEED], bump = global.bump, has_one = admin @ SupportError::Unauthorized)]
+    pub global: Account<'info, GlobalConfig>,
+    #[account(
+        init_if_needed,
+        payer = admin,
+        space = 8 + AdminTransfer::INIT_SPACE,
+        seeds = [ADMIN_TRANSFER_SEED],
+        bump,
+    )]
+    pub admin_transfer: Account<'info, AdminTransfer>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CancelAdminTransfer<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [GLOBAL_SEED], bump = global.bump, has_one = admin @ SupportError::Unauthorized)]
+    pub global: Account<'info, GlobalConfig>,
+    #[account(mut, seeds = [ADMIN_TRANSFER_SEED], bump = admin_transfer.bump, close = admin)]
+    pub admin_transfer: Account<'info, AdminTransfer>,
+}
+
+#[derive(Accounts)]
+pub struct AcceptAdmin<'info> {
+    #[account(mut)]
+    pub new_admin: Signer<'info>,
+    #[account(mut, seeds = [GLOBAL_SEED], bump = global.bump)]
+    pub global: Account<'info, GlobalConfig>,
+    #[account(
+        mut,
+        seeds = [ADMIN_TRANSFER_SEED],
+        bump = admin_transfer.bump,
+        constraint = admin_transfer.pending_admin == new_admin.key() @ SupportError::Unauthorized,
+        close = new_admin,
+    )]
+    pub admin_transfer: Account<'info, AdminTransfer>,
 }
 
 #[derive(Accounts)]
@@ -952,6 +1063,18 @@ pub struct CreatorPauseChanged {
 #[event]
 pub struct ProtocolPauseChanged {
     pub paused: bool,
+}
+
+#[event]
+pub struct TreasuryChanged {
+    pub previous_treasury_usdc_account: Pubkey,
+    pub treasury_usdc_account: Pubkey,
+}
+
+#[event]
+pub struct AdminChanged {
+    pub previous_admin: Pubkey,
+    pub admin: Pubkey,
 }
 
 #[event]
