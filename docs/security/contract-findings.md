@@ -22,7 +22,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | SEC-12 | Informational | Missing events and unconsumed events leave the indexer blind to plan closure, registrar change and pending rotations | Fixed (three new events; every event now indexed) | app `events.test.ts`, `indexer.test.ts` SEC-12 |
 | SEC-13 | Informational | Program accounts are never closable; member rent is locked forever | Accepted for v0 | n/a |
 | SEC-14 | Informational | Registrar co-signature would replay across clusters if the key were reused | Documented rule: one registrar key per cluster (`rotate-registrar.md`) | n/a |
-| SEC-15 | Informational | A Token-2022 mint with transfer fees would make events overstate what arrived | Accepted (USDC is classic SPL) | n/a |
+| SEC-15 | Informational | A Token-2022 mint with transfer fees would make events overstate what arrived | Fixed (`initialize` accepts only a classic SPL Token mint) | `security.test.ts` SEC-2/SEC-15 |
 
 ## Details
 
@@ -196,7 +196,9 @@ The program ID, seeds and therefore every PDA are identical on devnet and mainne
 
 ### SEC-15 · A Token-2022 mint with transfer fees would make events overstate what arrived
 
-The program accepts either token program. If the USDC mint were ever a Token-2022 mint with the transfer-fee extension, `creator_amount` in events would exceed what the creator receives. Accepted: USDC is classic SPL Token and the mint is fixed at `initialize`. If that changes, reject mints carrying the extension or record post-fee amounts.
+The program accepts either token program for accounts. If the USDC mint were ever a Token-2022 mint with the transfer-fee extension, `creator_amount` in events would exceed what the creator receives. USDC is classic SPL Token and the mint is fixed at `initialize`.
+
+**Done (16 September 2026).** `initialize` refuses a mint not owned by the classic SPL Token program with `UnsupportedTokenProgram`, so a transfer-fee mint cannot be configured by mistake. Pinned by `security.test.ts` "SEC-2": a structurally valid Token-2022 mint is refused by the upgrade authority before the classic mint succeeds.
 
 ## What holds up
 

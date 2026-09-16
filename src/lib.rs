@@ -943,6 +943,10 @@ pub struct Initialize<'info> {
         bump,
     )]
     pub global: Account<'info, GlobalConfig>,
+    /// SEC-15: USDC is a classic SPL Token mint. A Token-2022 mint could carry
+    /// a transfer-fee extension that makes emitted amounts overstate what
+    /// arrives, so the program refuses any other token program here.
+    #[account(constraint = usdc_mint.to_account_info().owner == &anchor_spl::token::ID @ SupportError::UnsupportedTokenProgram)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
     #[account(constraint = treasury_usdc_account.mint == usdc_mint.key() @ SupportError::WrongMint)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
@@ -1385,6 +1389,8 @@ pub enum SupportError {
     OtherDelegate,
     #[msg("A creator cannot send support to their own page")]
     SelfSupport,
+    #[msg("The mint must belong to the classic SPL Token program")]
+    UnsupportedTokenProgram,
 }
 
 #[cfg(test)]
