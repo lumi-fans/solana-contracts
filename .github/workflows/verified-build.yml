@@ -41,7 +41,8 @@ jobs:
         with:
           key: solana-verify
       - name: Install solana-verify
-        run: cargo install solana-verify --version "$SOLANA_VERIFY_VERSION" --locked
+        # rust-toolchain.toml pins the checkout to 1.86; the CLI needs 1.89.
+        run: cargo +1.89.0 install solana-verify --version "$SOLANA_VERIFY_VERSION" --locked
       - name: Choose the cluster
         id: cluster
         run: |
