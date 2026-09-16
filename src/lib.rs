@@ -47,11 +47,19 @@ pub const MIN_GIFT: u64 = 1_000_000;
 pub const MIN_PLAN_PRICE: u64 = 1_000_000;
 pub const MAX_PLAN_PRICE: u64 = 500_000_000;
 
-/// DECISION(Q7): a membership period is measured in seconds from the previous
-/// charge. Bounded so a plan cannot be created with a period that lets a
-/// creator charge every block or never.
+/// DECISION(Q7): a fixed-length membership period is measured in seconds from
+/// the start of the previous period. A plan of exactly `MONTHLY_PERIOD_SECONDS`
+/// bills by calendar month instead: the same day each month, clamped to the
+/// end of shorter months. Bounded so a plan cannot be created with a period
+/// that lets a creator charge every block or never.
 pub const MIN_PERIOD_SECONDS: i64 = 24 * 60 * 60;
 pub const MAX_PERIOD_SECONDS: i64 = 366 * 24 * 60 * 60;
+pub const MONTHLY_PERIOD_SECONDS: i64 = 30 * 86400;
+
+/// How long after a due date a charge still counts for that period. A manual
+/// payment inside the window starts its month at the due date; a later one
+/// starts a fresh month from the payment. Renewal mandates expire past it.
+pub const GRACE_SECONDS: i64 = 3 * 86400;
 
 /// Cooling period before a creator's payment-account rotation takes effect.
 pub const ROTATION_COOLING_SECONDS: i64 = 48 * 60 * 60;
@@ -286,6 +294,11 @@ pub mod infx_support {
     /// time. A charge cannot exceed the plan price, cannot happen inside the
     /// period, and cannot happen on a closed plan or a paused creator.
     ///
+    /// `last_charged_at` is the start of the paid period, not the wall-clock
+    /// time of the payment. A monthly payment inside `GRACE_SECONDS` of its
+    /// due date keeps the anniversary; a later one re-anchors the membership
+    /// to the payment date, so a member never buys less than a month (SEC-3).
+    ///
     /// Paying again after cancelling is a deliberate act by the member and
     /// re-activates the membership.
     pub fn charge_membership_period(ctx: Context<ChargeMembershipPeriod>) -> Result<()> {
@@ -300,18 +313,20 @@ pub mod infx_support {
         let plan = &ctx.accounts.plan;
         let membership = &mut ctx.accounts.membership;
 
-        if membership.member == Pubkey::default() {
+        let period_start = if membership.member == Pubkey::default() {
             membership.member = ctx.accounts.member.key();
             membership.plan = plan.key();
             membership.joined_at = now;
             membership.benefits_hash_at_join = plan.benefits_hash;
             membership.bump = ctx.bumps.membership;
+            now
         } else {
             require!(
                 membership.member == ctx.accounts.member.key(),
                 SupportError::Unauthorized
             );
-            let earliest = if plan.period_seconds == 30 * 86400 {
+            let monthly = plan.period_seconds == MONTHLY_PERIOD_SECONDS;
+            let earliest = if monthly {
                 next_month(
                     membership.last_charged_at,
                     next_month(membership.joined_at, 0)?.1,
@@ -324,7 +339,21 @@ pub mod infx_support {
                     .ok_or(SupportError::MathOverflow)?
             };
             require!(now >= earliest, SupportError::PeriodNotElapsed);
-        }
+            let in_grace = now
+                <= earliest
+                    .checked_add(GRACE_SECONDS)
+                    .ok_or(SupportError::MathOverflow)?;
+            if monthly && in_grace {
+                earliest
+            } else {
+                if monthly {
+                    // Lapsed: the paid month runs from today and the
+                    // anniversary moves with it.
+                    membership.joined_at = now;
+                }
+                now
+            }
+        };
 
         let amount = plan.price;
         let (creator_amount, treasury_amount) = split(amount)?;
@@ -339,7 +368,7 @@ pub mod infx_support {
             treasury_amount,
         )?;
 
-        membership.last_charged_at = now;
+        membership.last_charged_at = period_start;
         membership.periods_paid = membership
             .periods_paid
             .checked_add(1)
@@ -380,7 +409,7 @@ pub mod infx_support {
             SupportError::InvalidMandate
         );
         require!(
-            ctx.accounts.plan.period_seconds == 30 * 86400,
+            ctx.accounts.plan.period_seconds == MONTHLY_PERIOD_SECONDS,
             SupportError::InvalidMandate
         );
         let membership = &ctx.accounts.membership;
@@ -478,11 +507,11 @@ pub mod infx_support {
             now >= mandate.next_charge_at,
             SupportError::PeriodNotElapsed
         );
-        // Missed renewals expire after a 72-hour retry window. No catch-up debt.
+        // Missed renewals expire after the grace window. No catch-up debt.
         require!(
             now <= mandate
                 .next_charge_at
-                .checked_add(3 * 86400)
+                .checked_add(GRACE_SECONDS)
                 .ok_or(SupportError::MathOverflow)?,
             SupportError::MandateExpired
         );

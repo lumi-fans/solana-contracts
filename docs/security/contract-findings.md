@@ -10,7 +10,7 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 | --- | --- | --- | --- | --- |
 | SEC-1 | High (before real money) | Upgrade authority is one hot key and every renewal allowance is a standing target | Mitigated in process: app `docs/runbooks/upgrade-authority.md`, Q22; the hand-over itself needs a named human | untested (process) |
 | SEC-2 | Medium | `initialize` is first-come; no `set_admin` or `set_treasury` | Fixed (contracts `set_treasury`/`propose_admin`/`accept_admin` + upgrade-authority gate; app commit pending) | `security.test.ts` SEC-2 (three cases) |
-| SEC-3 | Medium | Monthly periods anchor to the join day, so a late payment can buy one day | Open | `calendar_properties.rs` late_manual_payment…; `security.test.ts` finding 3 |
+| SEC-3 | Medium | Monthly periods anchor to the join day, so a late payment can buy one day | Fixed (grace window keeps the anniversary; a later payment re-anchors) | `security.test.ts` SEC-3 (lapsed and in-grace cases); `calendar_properties.rs` calendar_alone_would_shorten… |
 | SEC-4 | Low | Rotation cooling does not defend against creator-key compromise, and the promised notice does not exist | Open | `security.test.ts` finding 4 |
 | SEC-5 | Low | Self-gift and self-membership record full income while only the fee moves | Open | `security.test.ts` finding 5 |
 | SEC-6 | Low | Creator pause does not stop a rotation being requested or applied | Open | `security.test.ts` finding 6 |
@@ -66,7 +66,9 @@ Nothing found lets a third party move a fan's or creator's USDC without that per
 
 **Monthly-only change.** Becomes the only path. Fix it in that change.
 
-**Pinned by.** `calendar_properties.rs` `late_manual_payment_shortens_the_next_period_to_as_little_as_one_day`; `security.test.ts` "finding 3": a member whose previous charge was on the last day of last month is charged a full month today and their new mandate is due on the 1st of next month.
+**Done (16 September 2026).** `last_charged_at` now means the start of the paid period. A monthly payment inside `GRACE_SECONDS` (72 hours, the same window renewals use) of its due date records the due date as the period start, so the anniversary and time-of-day do not drift. A payment later than that re-anchors: `joined_at` and `last_charged_at` both become the payment time, so the paid month is a full calendar month from payment and any mandate authorised afterwards is first charged a month later. Fixed-second plans are unchanged (their period already runs from the previous charge). The `30 * 86400` literal became `MONTHLY_PERIOD_SECONDS` and the doc comment now describes both kinds of period. Consequence for the app: "Member since" on the creator page shows the start of the current unbroken run, since the web derives the anchor from `joined_at` on chain.
+
+**Pinned by.** `security.test.ts` "SEC-3": a member two months behind pays today, their `joined_at` moves to today and a renewal authorised next is due a full month later; a member 36 hours past due keeps their join date and their period starts at the due date. `calendar_properties.rs` `calendar_alone_would_shorten_a_late_payers_next_period_to_one_day` keeps the calendar fact that motivated the change.
 
 ### SEC-4 · Rotation cooling does not defend against creator-key compromise, and the promised notice does not exist
 

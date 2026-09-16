@@ -182,12 +182,14 @@ fn next_month_rejects_out_of_range_input() {
     assert!(next_month(ts(2026, 9, 16, 0), 255).is_err());
 }
 
-/// Documents finding: monthly periods are anchored to the join day, not to the
-/// previous charge. A member whose charge lands late is next chargeable at the
-/// anchor day of the following month, however soon that is. Paying on
-/// 31 January with an anchor of 1 buys a single day.
+/// SEC-3: the calendar alone would let a late payer's next due date fall on
+/// the anchor day of the following month, however soon that is. Paying on
+/// 31 January with an anchor of 1 would buy a single day. This is why
+/// `charge_membership_period` re-anchors a payment that lands more than
+/// `GRACE_SECONDS` after its due date; the validator suite in the app
+/// repository pins that behaviour.
 #[test]
-fn late_manual_payment_shortens_the_next_period_to_as_little_as_one_day() {
+fn calendar_alone_would_shorten_a_late_payers_next_period_to_one_day() {
     let paid_late = ts(2027, 1, 31, 12 * 3600);
     let (earliest_next, _) = next_month(paid_late, 1).unwrap();
     assert_eq!(earliest_next - paid_late, DAY);
