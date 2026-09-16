@@ -26,6 +26,10 @@ LUMI_LOCAL_RENEWAL_SECONDS=5 cargo build-sbf --tools-version v1.51 --sbf-out-dir
 
 Never deploy a `local-clock` artifact to a public cluster. The default build has no accelerated clock. The interval must be 5–86400 seconds. No program keypair, authority key, treasury secret or deployment credentials are included.
 
+## Security
+
+Findings from security review are tracked in [`docs/security/contract-findings.md`](docs/security/contract-findings.md), in priority order with a status and the test that pins each one; [`docs/security/README.md`](docs/security/README.md) says how to keep it current. `tests/calendar_properties.rs` checks the fee split and the calendar arithmetic against an independent implementation. Behavioural assertions against real transactions live in the app repository's validator suite.
+
 ## Scope
 
 This is source publication, not an audit or a mainnet launch. There is no custody or refund instruction. Renewals require capped wallet consent, expire after their retry window, and can be stopped by cancelling membership or revoking the token allowance. The program is currently marked `UNLICENSED`; publication does not grant a software license.
