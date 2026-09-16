@@ -83,10 +83,14 @@ jobs:
             echo "::error::the deterministic build (${BUILT}) is not what is deployed (${ONCHAIN}); deploy this artifact or tag the commit that was deployed"
             exit 1
           fi
+      - name: Artifact name without slashes
+        if: always()
+        id: artifact
+        run: echo "name=infx_support-${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
       - name: Keep the artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: infx_support-${{ github.ref_name }}
+          name: ${{ steps.artifact.outputs.name }}
           path: target/deploy/infx_support.so
           if-no-files-found: error
