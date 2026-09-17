@@ -69,6 +69,8 @@ pub const BPS_DENOMINATOR: u64 = 10_000;
 
 /// DECISION(Q6): minimums and maximums in USDC base units (six decimals).
 pub const MIN_GIFT: u64 = 1_000_000;
+/// A plan's price is the least a member may pay per period; the member
+/// chooses the actual amount, between the plan's minimum and MAX_PLAN_PRICE.
 pub const MIN_PLAN_PRICE: u64 = 1_000_000;
 pub const MAX_PLAN_PRICE: u64 = 500_000_000;
 
@@ -257,8 +259,9 @@ pub mod lumi {
         Ok(())
     }
 
-    /// A membership plan: a price per period and the hash of the benefits
-    /// description shown to members. The hash is a record, not a contract:
+    /// A membership plan: the minimum per period (`price`) and the hash of
+    /// the benefits description shown to members. Members choose what they
+    /// pay, at or above the minimum. The hash is a record, not a contract:
     /// Lumi does not enforce it (ADR 0007).
     pub fn create_membership_plan(
         ctx: Context<CreateMembershipPlan>,
@@ -326,9 +329,10 @@ pub mod lumi {
         Ok(())
     }
 
-    /// The member pays one period. Manual in Phase 1: the member signs each
-    /// time. A charge cannot exceed the plan price, cannot happen inside the
-    /// period, and cannot happen on a closed plan or a paused creator.
+    /// The member pays one period at an amount of their choosing, at or above
+    /// the plan's minimum and at most MAX_PLAN_PRICE. The amount is recorded on
+    /// the membership. A charge cannot happen inside the period, on a closed
+    /// plan or on a paused creator.
     ///
     /// `last_charged_at` is the start of the paid period, not the wall-clock
     /// time of the payment. A monthly payment inside `GRACE_SECONDS` of its
@@ -344,13 +348,20 @@ pub mod lumi {
     /// schedule moves on a month, so the keeper neither charges the same
     /// period again nor finds a mandate it can never use (SEC-17). The
     /// mandate's remaining automatic payments are not consumed.
-    pub fn charge_membership_period(ctx: Context<ChargeMembershipPeriod>) -> Result<()> {
+    pub fn charge_membership_period(
+        ctx: Context<ChargeMembershipPeriod>,
+        amount: u64,
+    ) -> Result<()> {
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
         require!(
             !ctx.accounts.support_config.paused,
             SupportError::CreatorPaused
         );
         require!(ctx.accounts.plan.active, SupportError::PlanClosed);
+        require!(
+            amount >= ctx.accounts.plan.price && amount <= MAX_PLAN_PRICE,
+            SupportError::PriceOutOfRange
+        );
 
         let now = Clock::get()?.unix_timestamp;
         let plan = &ctx.accounts.plan;
@@ -398,7 +409,6 @@ pub mod lumi {
             }
         };
 
-        let amount = plan.price;
         let (creator_amount, treasury_amount) = split(amount)?;
         pay(
             &ctx.accounts.token_program,
@@ -417,6 +427,7 @@ pub mod lumi {
             .as_ref()
             .is_some_and(|mandate| mandate.periods_paid == membership.periods_paid);
         membership.last_charged_at = period_start;
+        membership.amount = amount;
         membership.periods_paid = membership
             .periods_paid
             .checked_add(1)
@@ -431,7 +442,7 @@ pub mod lumi {
             let live = monthly
                 && mandate_in_step
                 && mandate.remaining > 0
-                && mandate.price == plan.price
+                && mandate.price >= plan.price
                 && mandate.benefits_hash == plan.benefits_hash
                 && now
                     <= mandate
@@ -457,12 +468,13 @@ pub mod lumi {
         Ok(())
     }
 
-    /// Opt-in permission for at most twelve calendar-month renewals. The source
+    /// Opt-in permission for at most twelve calendar-month renewals at an
+    /// amount the member chooses (at least the plan's minimum). The source
     /// stays member-owned; only this program's PDA can use its allowance.
     pub fn authorize_renewal(
         ctx: Context<AuthorizeRenewal>,
         payments: u16,
-        expected_price: u64,
+        amount: u64,
         expected_benefits_hash: [u8; 32],
     ) -> Result<()> {
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
@@ -473,8 +485,11 @@ pub mod lumi {
         require!(ctx.accounts.plan.active, SupportError::PlanClosed);
         require!((1..=12).contains(&payments), SupportError::InvalidMandate);
         require!(
-            ctx.accounts.plan.price == expected_price
-                && ctx.accounts.plan.benefits_hash == expected_benefits_hash,
+            amount >= ctx.accounts.plan.price && amount <= MAX_PLAN_PRICE,
+            SupportError::PriceOutOfRange
+        );
+        require!(
+            ctx.accounts.plan.benefits_hash == expected_benefits_hash,
             SupportError::InvalidMandate
         );
         require!(
@@ -499,10 +514,7 @@ pub mod lumi {
                 SupportError::OtherDelegate
             );
         }
-        let total = ctx
-            .accounts
-            .plan
-            .price
+        let total = amount
             .checked_mul(u64::from(payments))
             .ok_or(SupportError::MathOverflow)?;
         let mandate = &mut ctx.accounts.mandate;
@@ -544,7 +556,7 @@ pub mod lumi {
         mandate.member = membership.member;
         mandate.plan = ctx.accounts.plan.key();
         mandate.source = source.key();
-        mandate.price = ctx.accounts.plan.price;
+        mandate.price = amount;
         mandate.benefits_hash = ctx.accounts.plan.benefits_hash;
         mandate.next_charge_at = due;
         mandate.anchor_day = anchor_day;
@@ -623,8 +635,9 @@ pub mod lumi {
             mandate.remaining > 0 && mandate.periods_paid == membership.periods_paid,
             SupportError::InvalidMandate
         );
+        // A minimum raised above what the member consented to ends the mandate.
         require!(
-            mandate.price == ctx.accounts.plan.price
+            mandate.price >= ctx.accounts.plan.price
                 && mandate.benefits_hash == ctx.accounts.plan.benefits_hash,
             SupportError::InvalidMandate
         );
@@ -874,6 +887,8 @@ pub struct Membership {
     pub last_charged_at: i64,
     pub periods_paid: u32,
     pub benefits_hash_at_join: [u8; 32],
+    /// What the member last chose to pay per period, in USDC base units.
+    pub amount: u64,
     pub cancelled: bool,
     pub bump: u8,
 }
@@ -1419,7 +1434,7 @@ pub enum SupportError {
     Unauthorized,
     #[msg("Amount is below the minimum")]
     BelowMinimum,
-    #[msg("Plan price is outside the allowed range")]
+    #[msg("Amount is below the plan's minimum or above the allowed maximum")]
     PriceOutOfRange,
     #[msg("Plan period is outside the allowed range")]
     PeriodOutOfRange,
