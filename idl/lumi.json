@@ -9,19 +9,8 @@
   "instructions": [
     {
       "name": "accept_admin",
-      "docs": [
-        "Second half: the proposed key takes over and the proposal is closed."
-      ],
-      "discriminator": [
-        112,
-        42,
-        45,
-        90,
-        116,
-        181,
-        13,
-        170
-      ],
+      "docs": ["Second half: the proposed key takes over and the proposal is closed."],
+      "discriminator": [112, 42, 45, 90, 116, 181, 13, 170],
       "accounts": [
         {
           "name": "new_admin",
@@ -35,14 +24,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -54,22 +36,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  97,
-                  100,
-                  109,
-                  105,
-                  110,
-                  45,
-                  116,
-                  114,
-                  97,
-                  110,
-                  115,
-                  102,
-                  101,
-                  114
-                ]
+                "value": [97, 100, 109, 105, 110, 45, 116, 114, 97, 110, 115, 102, 101, 114]
               }
             ]
           }
@@ -84,16 +51,7 @@
         "the creator's earlier signature decided what it is. Not while the",
         "creator or the protocol is paused."
       ],
-      "discriminator": [
-        88,
-        232,
-        119,
-        239,
-        126,
-        32,
-        238,
-        13
-      ],
+      "discriminator": [88, 232, 119, 239, 126, 32, 238, 13],
       "accounts": [
         {
           "name": "global",
@@ -101,14 +59,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -120,15 +71,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -144,27 +87,17 @@
     {
       "name": "authorize_renewal",
       "docs": [
-        "Opt-in permission for at most twelve calendar-month renewals. The source",
+        "Opt-in permission for at most twelve calendar-month renewals at an",
+        "amount the member chooses (at least the plan's minimum). The source",
         "stays member-owned; only this program's PDA can use its allowance."
       ],
-      "discriminator": [
-        35,
-        115,
-        112,
-        227,
-        50,
-        136,
-        219,
-        56
-      ],
+      "discriminator": [35, 115, 112, 227, 50, 136, 219, 56],
       "accounts": [
         {
           "name": "member",
           "writable": true,
           "signer": true,
-          "relations": [
-            "membership"
-          ]
+          "relations": ["membership"]
         },
         {
           "name": "global",
@@ -172,14 +105,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -190,15 +116,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -214,12 +132,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  110
-                ]
+                "value": [112, 108, 97, 110]
               },
               {
                 "kind": "account",
@@ -233,9 +146,7 @@
               }
             ]
           },
-          "relations": [
-            "membership"
-          ]
+          "relations": ["membership"]
         },
         {
           "name": "membership",
@@ -243,18 +154,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  109,
-                  101,
-                  109,
-                  98,
-                  101,
-                  114,
-                  115,
-                  104,
-                  105,
-                  112
-                ]
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
               },
               {
                 "kind": "account",
@@ -274,15 +174,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  110,
-                  101,
-                  119,
-                  97,
-                  108
-                ]
+                "value": [114, 101, 110, 101, 119, 97, 108]
               },
               {
                 "kind": "account",
@@ -302,22 +194,7 @@
               {
                 "kind": "const",
                 "value": [
-                  114,
-                  101,
-                  110,
-                  101,
-                  119,
-                  97,
-                  108,
-                  45,
-                  100,
-                  101,
-                  108,
-                  101,
-                  103,
-                  97,
-                  116,
-                  101
+                  114, 101, 110, 101, 119, 97, 108, 45, 100, 101, 108, 101, 103, 97, 116, 101
                 ]
               },
               {
@@ -344,43 +221,27 @@
           "type": "u16"
         },
         {
-          "name": "expected_price",
+          "name": "amount",
           "type": "u64"
         },
         {
           "name": "expected_benefits_hash",
           "type": {
-            "array": [
-              "u8",
-              32
-            ]
+            "array": ["u8", 32]
           }
         }
       ]
     },
     {
       "name": "cancel_admin_transfer",
-      "docs": [
-        "The current admin withdraws a proposal."
-      ],
-      "discriminator": [
-        38,
-        131,
-        157,
-        31,
-        240,
-        137,
-        44,
-        215
-      ],
+      "docs": ["The current admin withdraws a proposal."],
+      "discriminator": [38, 131, 157, 31, 240, 137, 44, 215],
       "accounts": [
         {
           "name": "admin",
           "writable": true,
           "signer": true,
-          "relations": [
-            "global"
-          ]
+          "relations": ["global"]
         },
         {
           "name": "global",
@@ -388,14 +249,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -407,22 +261,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  97,
-                  100,
-                  109,
-                  105,
-                  110,
-                  45,
-                  116,
-                  114,
-                  97,
-                  110,
-                  115,
-                  102,
-                  101,
-                  114
-                ]
+                "value": [97, 100, 109, 105, 110, 45, 116, 114, 97, 110, 115, 102, 101, 114]
               }
             ]
           }
@@ -432,26 +271,13 @@
     },
     {
       "name": "cancel_membership",
-      "docs": [
-        "Cancellation prevents future charges and does nothing else."
-      ],
-      "discriminator": [
-        49,
-        7,
-        128,
-        159,
-        11,
-        73,
-        119,
-        162
-      ],
+      "docs": ["Cancellation prevents future charges and does nothing else."],
+      "discriminator": [49, 7, 128, 159, 11, 73, 119, 162],
       "accounts": [
         {
           "name": "member",
           "signer": true,
-          "relations": [
-            "membership"
-          ]
+          "relations": ["membership"]
         },
         {
           "name": "membership",
@@ -460,18 +286,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  109,
-                  101,
-                  109,
-                  98,
-                  101,
-                  114,
-                  115,
-                  104,
-                  105,
-                  112
-                ]
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
               },
               {
                 "kind": "account",
@@ -494,23 +309,12 @@
         "The creator can withdraw a pending rotation at any time before it applies,",
         "including while the protocol is paused: cancelling only reduces risk."
       ],
-      "discriminator": [
-        111,
-        127,
-        120,
-        251,
-        193,
-        71,
-        90,
-        242
-      ],
+      "discriminator": [111, 127, 120, 251, 193, 71, 90, 242],
       "accounts": [
         {
           "name": "creator",
           "signer": true,
-          "relations": [
-            "support_config"
-          ]
+          "relations": ["support_config"]
         },
         {
           "name": "support_config",
@@ -519,15 +323,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -542,9 +338,10 @@
     {
       "name": "charge_membership_period",
       "docs": [
-        "The member pays one period. Manual in Phase 1: the member signs each",
-        "time. A charge cannot exceed the plan price, cannot happen inside the",
-        "period, and cannot happen on a closed plan or a paused creator.",
+        "The member pays one period at an amount of their choosing, at or above",
+        "the plan's minimum and at most MAX_PLAN_PRICE. The amount is recorded on",
+        "the membership. A charge cannot happen inside the period, on a closed",
+        "plan or on a paused creator.",
         "",
         "`last_charged_at` is the start of the paid period, not the wall-clock",
         "time of the payment. A monthly payment inside `GRACE_SECONDS` of its",
@@ -561,16 +358,7 @@
         "period again nor finds a mandate it can never use (SEC-17). The",
         "mandate's remaining automatic payments are not consumed."
       ],
-      "discriminator": [
-        156,
-        22,
-        228,
-        30,
-        11,
-        81,
-        111,
-        34
-      ],
+      "discriminator": [156, 22, 228, 30, 11, 81, 111, 34],
       "accounts": [
         {
           "name": "member",
@@ -583,14 +371,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -601,15 +382,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -625,12 +398,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  110
-                ]
+                "value": [112, 108, 97, 110]
               },
               {
                 "kind": "account",
@@ -652,18 +420,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  109,
-                  101,
-                  109,
-                  98,
-                  101,
-                  114,
-                  115,
-                  104,
-                  105,
-                  112
-                ]
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
               },
               {
                 "kind": "account",
@@ -711,15 +468,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  110,
-                  101,
-                  119,
-                  97,
-                  108
-                ]
+                "value": [114, 101, 110, 101, 119, 97, 108]
               },
               {
                 "kind": "account",
@@ -729,7 +478,12 @@
           }
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "charge_renewal",
@@ -737,16 +491,7 @@
         "Permissionless submission: caller pays SOL but can only execute the exact",
         "signed mandate. Chain time and account locks prevent early/duplicate charges."
       ],
-      "discriminator": [
-        140,
-        82,
-        17,
-        154,
-        141,
-        53,
-        130,
-        197
-      ],
+      "discriminator": [140, 82, 17, 154, 141, 53, 130, 197],
       "accounts": [
         {
           "name": "global",
@@ -754,14 +499,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -772,15 +510,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -796,12 +526,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  110
-                ]
+                "value": [112, 108, 97, 110]
               },
               {
                 "kind": "account",
@@ -815,10 +540,7 @@
               }
             ]
           },
-          "relations": [
-            "membership",
-            "mandate"
-          ]
+          "relations": ["membership", "mandate"]
         },
         {
           "name": "membership",
@@ -827,18 +549,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  109,
-                  101,
-                  109,
-                  98,
-                  101,
-                  114,
-                  115,
-                  104,
-                  105,
-                  112
-                ]
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
               },
               {
                 "kind": "account",
@@ -859,15 +570,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  110,
-                  101,
-                  119,
-                  97,
-                  108
-                ]
+                "value": [114, 101, 110, 101, 119, 97, 108]
               },
               {
                 "kind": "account",
@@ -887,22 +590,7 @@
               {
                 "kind": "const",
                 "value": [
-                  114,
-                  101,
-                  110,
-                  101,
-                  119,
-                  97,
-                  108,
-                  45,
-                  100,
-                  101,
-                  108,
-                  101,
-                  103,
-                  97,
-                  116,
-                  101
+                  114, 101, 110, 101, 119, 97, 108, 45, 100, 101, 108, 101, 103, 97, 116, 101
                 ]
               },
               {
@@ -932,28 +620,18 @@
     {
       "name": "create_membership_plan",
       "docs": [
-        "A membership plan: a price per period and the hash of the benefits",
-        "description shown to members. The hash is a record, not a contract:",
+        "A membership plan: the minimum per period (`price`) and the hash of",
+        "the benefits description shown to members. Members choose what they",
+        "pay, at or above the minimum. The hash is a record, not a contract:",
         "Lumi does not enforce it (ADR 0007)."
       ],
-      "discriminator": [
-        242,
-        84,
-        233,
-        84,
-        224,
-        75,
-        27,
-        118
-      ],
+      "discriminator": [242, 84, 233, 84, 224, 75, 27, 118],
       "accounts": [
         {
           "name": "creator",
           "writable": true,
           "signer": true,
-          "relations": [
-            "support_config"
-          ]
+          "relations": ["support_config"]
         },
         {
           "name": "global",
@@ -961,14 +639,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -980,15 +651,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -1004,12 +667,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  110
-                ]
+                "value": [112, 108, 97, 110]
               },
               {
                 "kind": "account",
@@ -1040,29 +698,15 @@
         {
           "name": "benefits_hash",
           "type": {
-            "array": [
-              "u8",
-              32
-            ]
+            "array": ["u8", 32]
           }
         }
       ]
     },
     {
       "name": "gift",
-      "docs": [
-        "A one-off gift. 99.9% to the creator, 0.1% to the treasury, nothing else."
-      ],
-      "discriminator": [
-        166,
-        241,
-        165,
-        114,
-        166,
-        138,
-        63,
-        165
-      ],
+      "docs": ["A one-off gift. 99.9% to the creator, 0.1% to the treasury, nothing else."],
+      "discriminator": [166, 241, 165, 114, 166, 138, 63, 165],
       "accounts": [
         {
           "name": "fan",
@@ -1074,14 +718,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -1092,15 +729,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -1145,16 +774,7 @@
         "`propose_admin` then `accept_admin`), which on mainnet is the Squads",
         "multisig."
       ],
-      "discriminator": [
-        175,
-        175,
-        109,
-        31,
-        13,
-        152,
-        155,
-        237
-      ],
+      "discriminator": [175, 175, 109, 31, 13, 152, 155, 237],
       "accounts": [
         {
           "name": "admin",
@@ -1168,14 +788,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -1193,16 +806,12 @@
         },
         {
           "name": "program",
-          "docs": [
-            "This program, so its ProgramData account can be checked."
-          ],
+          "docs": ["This program, so its ProgramData account can be checked."],
           "address": "GkZ9HQvNe1m1KDPA3D9HtFWNdkMe2baaed2fKH8w4FUv"
         },
         {
           "name": "program_data",
-          "docs": [
-            "Only the upgrade authority may initialise."
-          ]
+          "docs": ["Only the upgrade authority may initialise."]
         },
         {
           "name": "system_program",
@@ -1222,24 +831,13 @@
         "First half of an admin hand-over. Nothing changes until the proposed",
         "key signs `accept_admin`, so a typo cannot strand the protocol."
       ],
-      "discriminator": [
-        121,
-        214,
-        199,
-        212,
-        87,
-        39,
-        117,
-        234
-      ],
+      "discriminator": [121, 214, 199, 212, 87, 39, 117, 234],
       "accounts": [
         {
           "name": "admin",
           "writable": true,
           "signer": true,
-          "relations": [
-            "global"
-          ]
+          "relations": ["global"]
         },
         {
           "name": "global",
@@ -1247,14 +845,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -1266,22 +857,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  97,
-                  100,
-                  109,
-                  105,
-                  110,
-                  45,
-                  116,
-                  114,
-                  97,
-                  110,
-                  115,
-                  102,
-                  101,
-                  114
-                ]
+                "value": [97, 100, 109, 105, 110, 45, 116, 114, 97, 110, 115, 102, 101, 114]
               }
             ]
           }
@@ -1305,24 +881,13 @@
         "sign: the registrar attests to verification, the creator attests to the",
         "payment account. Neither can do it alone."
       ],
-      "discriminator": [
-        85,
-        3,
-        194,
-        210,
-        164,
-        140,
-        160,
-        195
-      ],
+      "discriminator": [85, 3, 194, 210, 164, 140, 160, 195],
       "accounts": [
         {
           "name": "registrar",
           "writable": true,
           "signer": true,
-          "relations": [
-            "global"
-          ]
+          "relations": ["global"]
         },
         {
           "name": "creator",
@@ -1334,14 +899,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -1353,15 +911,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -1386,23 +936,12 @@
         "The creator asks to move where they are paid. It takes effect after the",
         "cooling period, and the pending change is visible on-chain meanwhile."
       ],
-      "discriminator": [
-        51,
-        204,
-        87,
-        251,
-        21,
-        133,
-        84,
-        6
-      ],
+      "discriminator": [51, 204, 87, 251, 21, 133, 84, 6],
       "accounts": [
         {
           "name": "creator",
           "signer": true,
-          "relations": [
-            "support_config"
-          ]
+          "relations": ["support_config"]
         },
         {
           "name": "global",
@@ -1410,14 +949,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -1429,15 +961,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -1461,24 +985,12 @@
         "mandate's remaining share so the wallet shows only what other plans",
         "may still use. If that leaves nothing, the delegate is cleared."
       ],
-      "discriminator": [
-        60,
-        32,
-        214,
-        14,
-        237,
-        195,
-        169,
-        173
-      ],
+      "discriminator": [60, 32, 214, 14, 237, 195, 169, 173],
       "accounts": [
         {
           "name": "member",
           "signer": true,
-          "relations": [
-            "membership",
-            "mandate"
-          ]
+          "relations": ["membership", "mandate"]
         },
         {
           "name": "plan",
@@ -1486,12 +998,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  110
-                ]
+                "value": [112, 108, 97, 110]
               },
               {
                 "kind": "account",
@@ -1505,10 +1012,7 @@
               }
             ]
           },
-          "relations": [
-            "membership",
-            "mandate"
-          ]
+          "relations": ["membership", "mandate"]
         },
         {
           "name": "membership",
@@ -1516,18 +1020,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  109,
-                  101,
-                  109,
-                  98,
-                  101,
-                  114,
-                  115,
-                  104,
-                  105,
-                  112
-                ]
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
               },
               {
                 "kind": "account",
@@ -1547,15 +1040,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  110,
-                  101,
-                  119,
-                  97,
-                  108
-                ]
+                "value": [114, 101, 110, 101, 119, 97, 108]
               },
               {
                 "kind": "account",
@@ -1575,22 +1060,7 @@
               {
                 "kind": "const",
                 "value": [
-                  114,
-                  101,
-                  110,
-                  101,
-                  119,
-                  97,
-                  108,
-                  45,
-                  100,
-                  101,
-                  108,
-                  101,
-                  103,
-                  97,
-                  116,
-                  101
+                  114, 101, 110, 101, 119, 97, 108, 45, 100, 101, 108, 101, 103, 97, 116, 101
                 ]
               },
               {
@@ -1616,16 +1086,7 @@
         "Only the admin can unpause (SEC-8): the registrar is a hot key, and a",
         "leaked one must not be able to reverse an enforcement pause."
       ],
-      "discriminator": [
-        70,
-        69,
-        153,
-        242,
-        228,
-        190,
-        49,
-        144
-      ],
+      "discriminator": [70, 69, 153, 242, 228, 190, 49, 144],
       "accounts": [
         {
           "name": "authority",
@@ -1637,14 +1098,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -1656,15 +1110,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
+                "value": [99, 114, 101, 97, 116, 111, 114]
               },
               {
                 "kind": "account",
@@ -1684,23 +1130,12 @@
     },
     {
       "name": "set_paused",
-      "discriminator": [
-        91,
-        60,
-        125,
-        192,
-        176,
-        225,
-        166,
-        218
-      ],
+      "discriminator": [91, 60, 125, 192, 176, 225, 166, 218],
       "accounts": [
         {
           "name": "admin",
           "signer": true,
-          "relations": [
-            "global"
-          ]
+          "relations": ["global"]
         },
         {
           "name": "global",
@@ -1709,14 +1144,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -1735,23 +1163,12 @@
         "Closing a plan stops new charges. Existing members keep what they paid",
         "for; nothing is refunded because nothing is held."
       ],
-      "discriminator": [
-        215,
-        87,
-        208,
-        194,
-        87,
-        65,
-        181,
-        5
-      ],
+      "discriminator": [215, 87, 208, 194, 87, 65, 181, 5],
       "accounts": [
         {
           "name": "creator",
           "signer": true,
-          "relations": [
-            "plan"
-          ]
+          "relations": ["plan"]
         },
         {
           "name": "plan",
@@ -1760,12 +1177,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  110
-                ]
+                "value": [112, 108, 97, 110]
               },
               {
                 "kind": "account",
@@ -1793,23 +1205,12 @@
         "A new benefits description creates a new version. Members keep the hash",
         "they joined under so they can show what was promised when they paid."
       ],
-      "discriminator": [
-        197,
-        33,
-        50,
-        126,
-        209,
-        198,
-        80,
-        149
-      ],
+      "discriminator": [197, 33, 50, 126, 209, 198, 80, 149],
       "accounts": [
         {
           "name": "creator",
           "signer": true,
-          "relations": [
-            "plan"
-          ]
+          "relations": ["plan"]
         },
         {
           "name": "plan",
@@ -1818,12 +1219,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  110
-                ]
+                "value": [112, 108, 97, 110]
               },
               {
                 "kind": "account",
@@ -1842,33 +1238,19 @@
         {
           "name": "benefits_hash",
           "type": {
-            "array": [
-              "u8",
-              32
-            ]
+            "array": ["u8", 32]
           }
         }
       ]
     },
     {
       "name": "set_registrar",
-      "discriminator": [
-        218,
-        97,
-        53,
-        173,
-        221,
-        199,
-        57,
-        136
-      ],
+      "discriminator": [218, 97, 53, 173, 221, 199, 57, 136],
       "accounts": [
         {
           "name": "admin",
           "signer": true,
-          "relations": [
-            "global"
-          ]
+          "relations": ["global"]
         },
         {
           "name": "global",
@@ -1877,14 +1259,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -1903,23 +1278,12 @@
         "Points the fee share at a different USDC account, for example after the",
         "current one is frozen or closed. Every later gift and charge pays it."
       ],
-      "discriminator": [
-        57,
-        97,
-        196,
-        95,
-        195,
-        206,
-        106,
-        136
-      ],
+      "discriminator": [57, 97, 196, 95, 195, 206, 106, 136],
       "accounts": [
         {
           "name": "admin",
           "signer": true,
-          "relations": [
-            "global"
-          ]
+          "relations": ["global"]
         },
         {
           "name": "global",
@@ -1928,14 +1292,7 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
+                "value": [103, 108, 111, 98, 97, 108]
               }
             ]
           }
@@ -1950,291 +1307,93 @@
   "accounts": [
     {
       "name": "AdminTransfer",
-      "discriminator": [
-        8,
-        226,
-        88,
-        128,
-        195,
-        48,
-        234,
-        110
-      ]
+      "discriminator": [8, 226, 88, 128, 195, 48, 234, 110]
     },
     {
       "name": "GlobalConfig",
-      "discriminator": [
-        149,
-        8,
-        156,
-        202,
-        160,
-        252,
-        176,
-        217
-      ]
+      "discriminator": [149, 8, 156, 202, 160, 252, 176, 217]
     },
     {
       "name": "Membership",
-      "discriminator": [
-        231,
-        141,
-        180,
-        98,
-        109,
-        168,
-        175,
-        166
-      ]
+      "discriminator": [231, 141, 180, 98, 109, 168, 175, 166]
     },
     {
       "name": "MembershipPlan",
-      "discriminator": [
-        197,
-        67,
-        103,
-        109,
-        191,
-        17,
-        144,
-        131
-      ]
+      "discriminator": [197, 67, 103, 109, 191, 17, 144, 131]
     },
     {
       "name": "RenewalMandate",
-      "discriminator": [
-        171,
-        207,
-        134,
-        45,
-        69,
-        98,
-        174,
-        143
-      ]
+      "discriminator": [171, 207, 134, 45, 69, 98, 174, 143]
     },
     {
       "name": "SupportConfig",
-      "discriminator": [
-        205,
-        22,
-        139,
-        144,
-        17,
-        203,
-        160,
-        0
-      ]
+      "discriminator": [205, 22, 139, 144, 17, 203, 160, 0]
     }
   ],
   "events": [
     {
       "name": "AdminChanged",
-      "discriminator": [
-        232,
-        34,
-        31,
-        226,
-        62,
-        18,
-        19,
-        114
-      ]
+      "discriminator": [232, 34, 31, 226, 62, 18, 19, 114]
     },
     {
       "name": "CreatorPauseChanged",
-      "discriminator": [
-        192,
-        209,
-        183,
-        28,
-        86,
-        34,
-        183,
-        249
-      ]
+      "discriminator": [192, 209, 183, 28, 86, 34, 183, 249]
     },
     {
       "name": "CreatorRegistered",
-      "discriminator": [
-        171,
-        154,
-        9,
-        10,
-        48,
-        130,
-        186,
-        128
-      ]
+      "discriminator": [171, 154, 9, 10, 48, 130, 186, 128]
     },
     {
       "name": "MembershipCancelled",
-      "discriminator": [
-        94,
-        168,
-        103,
-        67,
-        69,
-        57,
-        84,
-        48
-      ]
+      "discriminator": [94, 168, 103, 67, 69, 57, 84, 48]
     },
     {
       "name": "MembershipCharged",
-      "discriminator": [
-        208,
-        101,
-        92,
-        202,
-        169,
-        145,
-        10,
-        4
-      ]
+      "discriminator": [208, 101, 92, 202, 169, 145, 10, 4]
     },
     {
       "name": "PaymentAccountRotated",
-      "discriminator": [
-        145,
-        122,
-        82,
-        124,
-        139,
-        95,
-        179,
-        13
-      ]
+      "discriminator": [145, 122, 82, 124, 139, 95, 179, 13]
     },
     {
       "name": "PaymentAccountRotationCancelled",
-      "discriminator": [
-        2,
-        242,
-        31,
-        114,
-        201,
-        67,
-        19,
-        206
-      ]
+      "discriminator": [2, 242, 31, 114, 201, 67, 19, 206]
     },
     {
       "name": "PaymentAccountRotationRequested",
-      "discriminator": [
-        122,
-        249,
-        237,
-        81,
-        171,
-        211,
-        56,
-        131
-      ]
+      "discriminator": [122, 249, 237, 81, 171, 211, 56, 131]
     },
     {
       "name": "PlanActiveChanged",
-      "discriminator": [
-        144,
-        150,
-        208,
-        53,
-        102,
-        29,
-        90,
-        52
-      ]
+      "discriminator": [144, 150, 208, 53, 102, 29, 90, 52]
     },
     {
       "name": "PlanBenefitsUpdated",
-      "discriminator": [
-        141,
-        243,
-        116,
-        232,
-        105,
-        176,
-        245,
-        111
-      ]
+      "discriminator": [141, 243, 116, 232, 105, 176, 245, 111]
     },
     {
       "name": "PlanCreated",
-      "discriminator": [
-        215,
-        11,
-        135,
-        121,
-        208,
-        119,
-        149,
-        149
-      ]
+      "discriminator": [215, 11, 135, 121, 208, 119, 149, 149]
     },
     {
       "name": "ProtocolPauseChanged",
-      "discriminator": [
-        67,
-        33,
-        235,
-        73,
-        71,
-        124,
-        172,
-        110
-      ]
+      "discriminator": [67, 33, 235, 73, 71, 124, 172, 110]
     },
     {
       "name": "RegistrarChanged",
-      "discriminator": [
-        50,
-        193,
-        15,
-        230,
-        46,
-        78,
-        164,
-        26
-      ]
+      "discriminator": [50, 193, 15, 230, 46, 78, 164, 26]
     },
     {
       "name": "RenewalRevoked",
-      "discriminator": [
-        223,
-        90,
-        77,
-        131,
-        103,
-        45,
-        130,
-        1
-      ]
+      "discriminator": [223, 90, 77, 131, 103, 45, 130, 1]
     },
     {
       "name": "SupportReceived",
-      "discriminator": [
-        163,
-        217,
-        225,
-        181,
-        40,
-        68,
-        45,
-        224
-      ]
+      "discriminator": [163, 217, 225, 181, 40, 68, 45, 224]
     },
     {
       "name": "TreasuryChanged",
-      "discriminator": [
-        252,
-        2,
-        55,
-        56,
-        106,
-        205,
-        227,
-        47
-      ]
+      "discriminator": [252, 2, 55, 56, 106, 205, 227, 47]
     }
   ],
   "errors": [
@@ -2266,7 +1425,7 @@
     {
       "code": 6005,
       "name": "PriceOutOfRange",
-      "msg": "Plan price is outside the allowed range"
+      "msg": "Amount is below the plan's minimum or above the allowed maximum"
     },
     {
       "code": 6006,
@@ -2473,11 +1632,13 @@
           {
             "name": "benefits_hash_at_join",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "array": ["u8", 32]
             }
+          },
+          {
+            "name": "amount",
+            "docs": ["What the member last chose to pay per period, in USDC base units."],
+            "type": "u64"
           },
           {
             "name": "cancelled",
@@ -2574,10 +1735,7 @@
           {
             "name": "benefits_hash",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "array": ["u8", 32]
             }
           },
           {
@@ -2671,10 +1829,7 @@
           {
             "name": "benefits_hash",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "array": ["u8", 32]
             }
           }
         ]
@@ -2708,10 +1863,7 @@
           {
             "name": "benefits_hash",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "array": ["u8", 32]
             }
           }
         ]
@@ -2769,10 +1921,7 @@
           {
             "name": "benefits_hash",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "array": ["u8", 32]
             }
           },
           {
