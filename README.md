@@ -59,7 +59,7 @@ The binary embeds a `security.txt` section (contact, policy, source) that explor
 
 ## Scope
 
-This is source publication, not an audit or a mainnet launch. There is no custody or refund instruction. Renewals require capped wallet consent, expire after their retry window, and can be stopped by cancelling membership or revoking the token allowance. The program is currently marked `UNLICENSED`; publication does not grant a software license.
+This is source publication, not an audit or a mainnet launch. There is no custody or refund instruction. Renewals require capped wallet consent, expire after their retry window, and can be stopped by cancelling membership or revoking the token allowance. The program is published under the Business Source License 1.1 (`LICENSE`): anyone may read, build, test and verify it, and use it on test networks; production use is limited to Lumi's own deployment until the change date, 18 September 2030, when it becomes MIT.
 
 ## GitHub Actions
 

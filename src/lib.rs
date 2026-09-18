@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BUSL-1.1
 //! lumi: the Phase 1 product.
 //!
 //! A fan sends a one-off gift or pays a membership period in USDC or wrapped SOL. In the same
