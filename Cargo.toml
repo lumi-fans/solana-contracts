@@ -1,6 +1,6 @@
 [package]
 name = "lumi"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lumi direct support: gifts and membership charges, 99.9% to the creator and 0.1% to the treasury in one instruction"
 edition = "2021"
 license = "UNLICENSED"

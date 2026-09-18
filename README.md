@@ -1,6 +1,6 @@
 # Lumi Solana contracts
 
-Lumi’s Anchor program for direct USDC gifts, creator memberships and capped recurring payments on Solana. Each payment sends 99.9% to the creator and 0.1% to the treasury, rounding the treasury share down in integer token base units. Network fees and account rent are separate SOL costs.
+Lumi’s Anchor program for direct USDC and wrapped-SOL gifts, creator memberships and capped recurring payments on Solana. Each payment sends 99.9% to the creator and 0.1% to the treasury, rounding the treasury share down in integer token base units. Network fees and account rent are separate SOL costs.
 
 This repository contains the contract source and Rust tests. The Lumi application, onboarding service, indexer, client and full-stack E2E suite are maintained separately in the private app repository. The Rust crate is `lumi`; the program module, IDL and build artifact use `lumi`. The naming change preserves the program address, instruction names and discriminators, account layouts and PDA seeds, so existing accounts remain compatible.
 
@@ -15,6 +15,16 @@ cargo build-sbf --tools-version v1.51
 ```
 
 Use the standard build for calendar-month billing. The app pins this repository as a Git submodule at `programs/lumi`; initialize recursive submodules after cloning the app.
+
+## SOL payments (0.2.0)
+
+Native SOL is wrapped in the supporter's own classic-token account before payment. The creator and treasury receive wrapped SOL. The program does not custody the renewal balance or convert currencies.
+
+SOL uses the native mint `So11111111111111111111111111111111111111112`. Plan index `4294967295` is reserved for one fixed-terms SOL plan per registered creator: 0.001 SOL minimum, calendar-month periods, no perks. A supporter can pay its rent on the first payment; repeating initialization cannot reset creator closure or existing terms. Each monthly amount is capped at 50 SOL; consent permits at most twelve further payments at that exact amount. These are SOL amounts, with no dollar peg.
+
+Existing instructions and account layouts remain compatible. Membership payments and consent select their mint from the plan index, preventing a USDC mandate from spending SOL. SOL recipients must be canonical wrapped-SOL accounts. A SOL gift, membership charge or renewal must append the currently configured USDC treasury account as a read-only remaining account: its verified token-account owner determines the SOL treasury recipient. Old USDC instructions need no extra account. SOL payments emit separate `SolSupportReceived`, `SolMembershipCharged` and `SolPlanCreated` events.
+
+App integration tests execute the SBF program, including atomic wrapping/payment/consent, exact fees, wrong recipients and treasury proof, currency substitution, renewal expiry and exhaustion, manual-renewal reconciliation, top-ups, revocation and creator closure. Publication of this source does not establish that a cluster has been upgraded; consult the app's deployment records.
 
 ## Disposable local clock
 
@@ -53,6 +63,6 @@ This is source publication, not an audit or a mainnet launch. There is no custod
 
 ## GitHub Actions
 
-This repository is private. `Contract checks` runs on pushes, pull requests and manual dispatch. It checks formatting, Clippy and Rust tests for both normal calendar-month and accelerated local-test builds, then separately compiles the normal Solana SBF program. It uploads only the normal `.so`, never a keypair. There is no deployment workflow.
+This repository is public. `Contract checks` runs on pushes, pull requests and manual dispatch. It checks formatting, Clippy and Rust tests for both normal calendar-month and accelerated local-test builds, then separately compiles the normal Solana SBF program. It uploads only the normal `.so`, never a keypair. There is no deployment workflow.
 
 The root `action.yml` allows the private app repository to obtain contract source through GitHub's organisation-scoped private-action sharing. GitHub supplies a temporary read-only download token; no personal token or deploy key is stored in the app. The app must pin the action to the exact full SHA of its `programs/lumi` gitlink. Mismatched revisions fail before compilation. When updating that gitlink, update `.github/actions/contracts/action.yml` in the app in the same commit.

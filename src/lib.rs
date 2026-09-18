@@ -1,6 +1,6 @@
 //! lumi: the Phase 1 product.
 //!
-//! A fan sends a one-off gift or pays a membership period in USDC. In the same
+//! A fan sends a one-off gift or pays a membership period in USDC or wrapped SOL. In the same
 //! instruction 99.9% goes to the creator's registered USDC account and 0.1% to the
 //! Lumi treasury. The program never holds a balance and has no instruction that
 //! can move funds anywhere except those two accounts.
@@ -73,6 +73,81 @@ pub const MIN_GIFT: u64 = 1_000_000;
 /// chooses the actual amount, between the plan's minimum and MAX_PLAN_PRICE.
 pub const MIN_PLAN_PRICE: u64 = 1_000_000;
 pub const MAX_PLAN_PRICE: u64 = 500_000_000;
+/// Reserved plan index keeps SOL memberships separate without changing old account layouts.
+pub const SOL_PLAN_INDEX: u32 = u32::MAX;
+pub const MIN_SOL_AMOUNT: u64 = 1_000_000; // 0.001 SOL
+pub const MAX_SOL_PLAN_PRICE: u64 = 50_000_000_000; // 50 SOL
+
+fn native_mint() -> Pubkey {
+    anchor_spl::token::spl_token::native_mint::id()
+}
+fn plan_mint(plan: &MembershipPlan, global: &GlobalConfig) -> Pubkey {
+    if plan.index == SOL_PLAN_INDEX {
+        native_mint()
+    } else {
+        global.usdc_mint
+    }
+}
+fn plan_maximum(plan: &MembershipPlan) -> u64 {
+    if plan.index == SOL_PLAN_INDEX {
+        MAX_SOL_PLAN_PRICE
+    } else {
+        MAX_PLAN_PRICE
+    }
+}
+fn creator_destination(mint: Pubkey, config: &SupportConfig) -> Pubkey {
+    if mint == native_mint() {
+        anchor_spl::associated_token::get_associated_token_address(&config.creator, &mint)
+    } else {
+        config.payment_account
+    }
+}
+/// SOL goes to the canonical WSOL account of the currently configured treasury's owner.
+/// The extra read-only account proves that owner; an API cannot choose a recipient.
+fn check_treasury(
+    global: &GlobalConfig,
+    mint: Pubkey,
+    destination: &TokenAccount,
+    destination_key: Pubkey,
+    remaining: &[AccountInfo],
+) -> Result<()> {
+    if mint != native_mint() {
+        require_keys_eq!(
+            destination_key,
+            global.treasury_usdc_account,
+            SupportError::WrongTreasuryAccount
+        );
+        return Ok(());
+    }
+    use anchor_lang::solana_program::program_pack::Pack;
+    let reference = remaining
+        .first()
+        .ok_or(SupportError::WrongTreasuryAccount)?;
+    require_keys_eq!(
+        *reference.key,
+        global.treasury_usdc_account,
+        SupportError::WrongTreasuryAccount
+    );
+    require_keys_eq!(
+        *reference.owner,
+        anchor_spl::token::ID,
+        SupportError::UnsupportedTokenProgram
+    );
+    let treasury =
+        anchor_spl::token::spl_token::state::Account::unpack(&reference.try_borrow_data()?)?;
+    require_keys_eq!(treasury.mint, global.usdc_mint, SupportError::WrongMint);
+    require_keys_eq!(
+        destination.owner,
+        treasury.owner,
+        SupportError::WrongTreasuryAccount
+    );
+    require_keys_eq!(
+        destination_key,
+        anchor_spl::associated_token::get_associated_token_address(&treasury.owner, &mint),
+        SupportError::WrongTreasuryAccount
+    );
+    Ok(())
+}
 
 /// DECISION(Q7): a fixed-length membership period is measured in seconds from
 /// the start of the previous period. A plan of exactly `MONTHLY_PERIOD_SECONDS`
@@ -229,12 +304,27 @@ pub mod lumi {
 
     /// A one-off gift. 99.9% to the creator, 0.1% to the treasury, nothing else.
     pub fn gift(ctx: Context<Gift>, amount: u64) -> Result<()> {
+        check_treasury(
+            &ctx.accounts.global,
+            ctx.accounts.usdc_mint.key(),
+            &ctx.accounts.treasury_usdc_account,
+            ctx.accounts.treasury_usdc_account.key(),
+            ctx.remaining_accounts,
+        )?;
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
         require!(
             !ctx.accounts.support_config.paused,
             SupportError::CreatorPaused
         );
-        require!(amount >= MIN_GIFT, SupportError::BelowMinimum);
+        require!(
+            amount
+                >= if ctx.accounts.usdc_mint.key() == native_mint() {
+                    MIN_SOL_AMOUNT
+                } else {
+                    MIN_GIFT
+                },
+            SupportError::BelowMinimum
+        );
 
         let (creator_amount, treasury_amount) = split(amount)?;
         pay(
@@ -248,14 +338,25 @@ pub mod lumi {
             treasury_amount,
         )?;
 
-        emit!(SupportReceived {
-            creator: ctx.accounts.support_config.creator,
-            fan: ctx.accounts.fan.key(),
-            amount,
-            creator_amount,
-            treasury_amount,
-            timestamp: Clock::get()?.unix_timestamp,
-        });
+        if ctx.accounts.usdc_mint.key() == native_mint() {
+            emit!(SolSupportReceived {
+                creator: ctx.accounts.support_config.creator,
+                fan: ctx.accounts.fan.key(),
+                amount,
+                creator_amount,
+                treasury_amount,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
+        } else {
+            emit!(SupportReceived {
+                creator: ctx.accounts.support_config.creator,
+                fan: ctx.accounts.fan.key(),
+                amount,
+                creator_amount,
+                treasury_amount,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
+        }
         Ok(())
     }
 
@@ -280,6 +381,10 @@ pub mod lumi {
         );
 
         let config = &mut ctx.accounts.support_config;
+        require!(
+            config.plan_count < SOL_PLAN_INDEX,
+            SupportError::MathOverflow
+        );
         let plan = &mut ctx.accounts.plan;
         plan.creator = config.creator;
         plan.index = config.plan_count;
@@ -300,6 +405,36 @@ pub mod lumi {
             price,
             period_seconds,
             benefits_hash,
+        });
+        Ok(())
+    }
+
+    /// Anyone may pay the rent to initialize this creator's fixed SOL support plan.
+    /// Existing plans are never reset: creator pause/closure and consent remain effective.
+    pub fn initialize_sol_plan(ctx: Context<InitializeSolPlan>) -> Result<()> {
+        require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
+        require!(
+            !ctx.accounts.support_config.paused,
+            SupportError::CreatorPaused
+        );
+        let plan = &mut ctx.accounts.plan;
+        if plan.creator != Pubkey::default() {
+            return Ok(());
+        }
+        plan.creator = ctx.accounts.support_config.creator;
+        plan.index = SOL_PLAN_INDEX;
+        plan.price = MIN_SOL_AMOUNT;
+        plan.period_seconds = MONTHLY_PERIOD_SECONDS;
+        plan.benefits_hash = [0; 32];
+        plan.active = true;
+        plan.bump = ctx.bumps.plan;
+        emit!(SolPlanCreated {
+            creator: plan.creator,
+            plan: plan.key(),
+            index: plan.index,
+            price: plan.price,
+            period_seconds: plan.period_seconds,
+            benefits_hash: plan.benefits_hash,
         });
         Ok(())
     }
@@ -352,6 +487,13 @@ pub mod lumi {
         ctx: Context<ChargeMembershipPeriod>,
         amount: u64,
     ) -> Result<()> {
+        check_treasury(
+            &ctx.accounts.global,
+            ctx.accounts.usdc_mint.key(),
+            &ctx.accounts.treasury_usdc_account,
+            ctx.accounts.treasury_usdc_account.key(),
+            ctx.remaining_accounts,
+        )?;
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
         require!(
             !ctx.accounts.support_config.paused,
@@ -359,7 +501,7 @@ pub mod lumi {
         );
         require!(ctx.accounts.plan.active, SupportError::PlanClosed);
         require!(
-            amount >= ctx.accounts.plan.price && amount <= MAX_PLAN_PRICE,
+            amount >= ctx.accounts.plan.price && amount <= plan_maximum(&ctx.accounts.plan),
             SupportError::PriceOutOfRange
         );
 
@@ -455,16 +597,29 @@ pub mod lumi {
             }
         }
 
-        emit!(MembershipCharged {
-            creator: ctx.accounts.support_config.creator,
-            plan: plan.key(),
-            member: membership.member,
-            amount,
-            creator_amount,
-            treasury_amount,
-            period_index: membership.periods_paid,
-            timestamp: now,
-        });
+        if ctx.accounts.usdc_mint.key() == native_mint() {
+            emit!(SolMembershipCharged {
+                creator: ctx.accounts.support_config.creator,
+                plan: plan.key(),
+                member: membership.member,
+                amount,
+                creator_amount,
+                treasury_amount,
+                period_index: membership.periods_paid,
+                timestamp: now,
+            });
+        } else {
+            emit!(MembershipCharged {
+                creator: ctx.accounts.support_config.creator,
+                plan: plan.key(),
+                member: membership.member,
+                amount,
+                creator_amount,
+                treasury_amount,
+                period_index: membership.periods_paid,
+                timestamp: now,
+            });
+        }
         Ok(())
     }
 
@@ -485,7 +640,7 @@ pub mod lumi {
         require!(ctx.accounts.plan.active, SupportError::PlanClosed);
         require!((1..=12).contains(&payments), SupportError::InvalidMandate);
         require!(
-            amount >= ctx.accounts.plan.price && amount <= MAX_PLAN_PRICE,
+            amount >= ctx.accounts.plan.price && amount <= plan_maximum(&ctx.accounts.plan),
             SupportError::PriceOutOfRange
         );
         require!(
@@ -621,6 +776,13 @@ pub mod lumi {
     /// Permissionless submission: caller pays SOL but can only execute the exact
     /// signed mandate. Chain time and account locks prevent early/duplicate charges.
     pub fn charge_renewal(ctx: Context<ChargeRenewal>) -> Result<()> {
+        check_treasury(
+            &ctx.accounts.global,
+            ctx.accounts.usdc_mint.key(),
+            &ctx.accounts.treasury_usdc_account,
+            ctx.accounts.treasury_usdc_account.key(),
+            ctx.remaining_accounts,
+        )?;
         require!(!ctx.accounts.global.paused, SupportError::ProtocolPaused);
         require!(
             !ctx.accounts.support_config.paused,
@@ -689,16 +851,29 @@ pub mod lumi {
             .checked_add(1)
             .ok_or(SupportError::MathOverflow)?;
         mandate.periods_paid = membership.periods_paid;
-        emit!(MembershipCharged {
-            creator: ctx.accounts.support_config.creator,
-            plan: ctx.accounts.plan.key(),
-            member: membership.member,
-            amount: mandate.price,
-            creator_amount,
-            treasury_amount,
-            period_index: membership.periods_paid,
-            timestamp: now,
-        });
+        if ctx.accounts.usdc_mint.key() == native_mint() {
+            emit!(SolMembershipCharged {
+                creator: ctx.accounts.support_config.creator,
+                plan: ctx.accounts.plan.key(),
+                member: membership.member,
+                amount: mandate.price,
+                creator_amount,
+                treasury_amount,
+                period_index: membership.periods_paid,
+                timestamp: now,
+            });
+        } else {
+            emit!(MembershipCharged {
+                creator: ctx.accounts.support_config.creator,
+                plan: ctx.accounts.plan.key(),
+                member: membership.member,
+                amount: mandate.price,
+                creator_amount,
+                treasury_amount,
+                period_index: membership.periods_paid,
+                timestamp: now,
+            });
+        }
         Ok(())
     }
 
@@ -926,12 +1101,12 @@ pub struct AuthorizeRenewal<'info> {
     pub membership: Box<Account<'info, Membership>>,
     #[account(init_if_needed, payer = member, space = 8 + RenewalMandate::INIT_SPACE, seeds = [b"renewal", membership.key().as_ref()], bump)]
     pub mandate: Box<Account<'info, RenewalMandate>>,
-    #[account(mut, constraint = member_usdc_account.owner == member.key() @ SupportError::Unauthorized, constraint = member_usdc_account.mint == global.usdc_mint @ SupportError::WrongMint)]
+    #[account(mut, constraint = member_usdc_account.owner == member.key() @ SupportError::Unauthorized, constraint = member_usdc_account.mint == usdc_mint.key() @ SupportError::WrongMint)]
     pub member_usdc_account: InterfaceAccount<'info, TokenAccount>,
     /// CHECK: PDA authority, not a data account; the seeds fix the only delegate accepted.
     #[account(seeds = [b"renewal-delegate", member_usdc_account.key().as_ref()], bump)]
     pub delegate: UncheckedAccount<'info>,
-    #[account(address = global.usdc_mint @ SupportError::WrongMint)]
+    #[account(address = plan_mint(&plan, &global) @ SupportError::WrongMint)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
@@ -972,24 +1147,24 @@ pub struct ChargeRenewal<'info> {
     pub membership: Box<Account<'info, Membership>>,
     #[account(mut, seeds = [b"renewal", membership.key().as_ref()], bump = mandate.bump, has_one = plan, constraint = mandate.member == membership.member @ SupportError::Unauthorized)]
     pub mandate: Box<Account<'info, RenewalMandate>>,
-    #[account(mut, address = mandate.source, constraint = member_usdc_account.owner == mandate.member @ SupportError::Unauthorized, constraint = member_usdc_account.mint == global.usdc_mint @ SupportError::WrongMint)]
+    #[account(mut, address = mandate.source, constraint = member_usdc_account.owner == mandate.member @ SupportError::Unauthorized, constraint = member_usdc_account.mint == usdc_mint.key() @ SupportError::WrongMint)]
     pub member_usdc_account: InterfaceAccount<'info, TokenAccount>,
     /// CHECK: seeds bind this transfer authority to the source account.
     #[account(seeds = [b"renewal-delegate", member_usdc_account.key().as_ref()], bump)]
     pub delegate: UncheckedAccount<'info>,
-    #[account(address = global.usdc_mint @ SupportError::WrongMint)]
+    #[account(address = plan_mint(&plan, &global) @ SupportError::WrongMint)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
     // Raw constraints run in order, so a substituted address reports
     // WrongPaymentAccount before the owner check below.
     #[account(
         mut,
-        constraint = creator_payment_account.key() == support_config.payment_account @ SupportError::WrongPaymentAccount,
+        constraint = creator_payment_account.key() == creator_destination(usdc_mint.key(), &support_config) @ SupportError::WrongPaymentAccount,
         // SEC-4: an account whose owner changed after registration is refused,
         // so a phished SetAuthority stops payments instead of redirecting them.
         constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
     )]
     pub creator_payment_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
+    #[account(mut, constraint = usdc_mint.key() == native_mint() || treasury_usdc_account.key() == global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
     pub token_program: Interface<'info, TokenInterface>,
 }
@@ -1130,11 +1305,11 @@ pub struct Gift<'info> {
         constraint = support_config.creator != fan.key() @ SupportError::SelfSupport,
     )]
     pub support_config: Account<'info, SupportConfig>,
-    #[account(address = global.usdc_mint @ SupportError::WrongMint)]
+    #[account(constraint = usdc_mint.key() == global.usdc_mint || usdc_mint.key() == native_mint() @ SupportError::WrongMint)]
     pub usdc_mint: InterfaceAccount<'info, Mint>,
     #[account(
         mut,
-        constraint = fan_usdc_account.mint == global.usdc_mint @ SupportError::WrongMint,
+        constraint = fan_usdc_account.mint == usdc_mint.key() @ SupportError::WrongMint,
         constraint = fan_usdc_account.owner == fan.key() @ SupportError::Unauthorized,
     )]
     pub fan_usdc_account: InterfaceAccount<'info, TokenAccount>,
@@ -1142,15 +1317,29 @@ pub struct Gift<'info> {
     // WrongPaymentAccount before the owner check below.
     #[account(
         mut,
-        constraint = creator_payment_account.key() == support_config.payment_account @ SupportError::WrongPaymentAccount,
+        constraint = creator_payment_account.key() == creator_destination(usdc_mint.key(), &support_config) @ SupportError::WrongPaymentAccount,
         // SEC-4: an account whose owner changed after registration is refused,
         // so a phished SetAuthority stops payments instead of redirecting them.
         constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
     )]
     pub creator_payment_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
+    #[account(mut, constraint = usdc_mint.key() == native_mint() || treasury_usdc_account.key() == global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
     pub treasury_usdc_account: InterfaceAccount<'info, TokenAccount>,
     pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct InitializeSolPlan<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
+    pub global: Account<'info, GlobalConfig>,
+    #[account(seeds = [CREATOR_SEED, support_config.creator.as_ref()], bump = support_config.bump)]
+    pub support_config: Account<'info, SupportConfig>,
+    #[account(init_if_needed, payer = payer, space = 8 + MembershipPlan::INIT_SPACE,
+        seeds = [PLAN_SEED, support_config.creator.as_ref(), &SOL_PLAN_INDEX.to_le_bytes()], bump)]
+    pub plan: Account<'info, MembershipPlan>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -1230,11 +1419,11 @@ pub struct ChargeMembershipPeriod<'info> {
         bump,
     )]
     pub membership: Box<Account<'info, Membership>>,
-    #[account(address = global.usdc_mint @ SupportError::WrongMint)]
+    #[account(address = plan_mint(&plan, &global) @ SupportError::WrongMint)]
     pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(
         mut,
-        constraint = member_usdc_account.mint == global.usdc_mint @ SupportError::WrongMint,
+        constraint = member_usdc_account.mint == usdc_mint.key() @ SupportError::WrongMint,
         constraint = member_usdc_account.owner == member.key() @ SupportError::Unauthorized,
     )]
     pub member_usdc_account: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -1242,13 +1431,13 @@ pub struct ChargeMembershipPeriod<'info> {
     // WrongPaymentAccount before the owner check below.
     #[account(
         mut,
-        constraint = creator_payment_account.key() == support_config.payment_account @ SupportError::WrongPaymentAccount,
+        constraint = creator_payment_account.key() == creator_destination(usdc_mint.key(), &support_config) @ SupportError::WrongPaymentAccount,
         // SEC-4: an account whose owner changed after registration is refused,
         // so a phished SetAuthority stops payments instead of redirecting them.
         constraint = creator_payment_account.owner == support_config.creator @ SupportError::PaymentAccountNotOwnedByCreator,
     )]
     pub creator_payment_account: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(mut, address = global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
+    #[account(mut, constraint = usdc_mint.key() == native_mint() || treasury_usdc_account.key() == global.treasury_usdc_account @ SupportError::WrongTreasuryAccount)]
     pub treasury_usdc_account: Box<InterfaceAccount<'info, TokenAccount>>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
@@ -1346,7 +1535,27 @@ pub struct SupportReceived {
 }
 
 #[event]
+pub struct SolSupportReceived {
+    pub creator: Pubkey,
+    pub fan: Pubkey,
+    pub amount: u64,
+    pub creator_amount: u64,
+    pub treasury_amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
 pub struct PlanCreated {
+    pub creator: Pubkey,
+    pub plan: Pubkey,
+    pub index: u32,
+    pub price: u64,
+    pub period_seconds: i64,
+    pub benefits_hash: [u8; 32],
+}
+
+#[event]
+pub struct SolPlanCreated {
     pub creator: Pubkey,
     pub plan: Pubkey,
     pub index: u32,
@@ -1380,6 +1589,18 @@ pub struct PlanBenefitsUpdated {
 
 #[event]
 pub struct MembershipCharged {
+    pub creator: Pubkey,
+    pub plan: Pubkey,
+    pub member: Pubkey,
+    pub amount: u64,
+    pub creator_amount: u64,
+    pub treasury_amount: u64,
+    pub period_index: u32,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct SolMembershipCharged {
     pub creator: Pubkey,
     pub plan: Pubkey,
     pub member: Pubkey,
@@ -1460,7 +1681,7 @@ pub enum SupportError {
     InvalidMandate,
     #[msg("The renewal retry window has expired; fresh consent is required")]
     MandateExpired,
-    #[msg("This USDC account already grants permission to another application; revoke it in your wallet first")]
+    #[msg("This token account already grants permission to another application; revoke it in your wallet first")]
     OtherDelegate,
     #[msg("A creator cannot send support to their own page")]
     SelfSupport,
